@@ -24,6 +24,7 @@ using namespace Novuss;
 // Globals
 // ---------------------------------------------------------------------------
 static volatile int g_running = 1;
+static volatile int g_sysutilPaused = 0;
 static gcmContextData* g_ctx = nullptr;
 static void* g_fbPtr[2] = {nullptr, nullptr};
 static u32 g_fbOffset[2] = {0, 0};
@@ -55,6 +56,12 @@ static padData s_lastData[2];
 // ---------------------------------------------------------------------------
 static void onSysutilEvent(u64 status, u64 /*param*/, void* /*usrdata*/) {
     switch (status) {
+        case SYSUTIL_MENU_OPEN:
+            g_sysutilPaused = 1;
+            break;
+        case SYSUTIL_MENU_CLOSE:
+            g_sysutilPaused = 0;
+            break;
         case SYSUTIL_EXIT_GAME:
             g_running = 0;
             break;
@@ -198,7 +205,7 @@ static void audioThreadMain(void* /*arg*/) {
         if (sysEventQueueReceive(g_audioQueue, &ev, 20000) == 0) {
             float* dst = (float*)(uintptr_t)g_audioConfig.audioDataStart +
                          blockIdx * AUDIO_BLOCK_SAMPLES * 2;
-            if (g_appPtr) {
+            if (g_appPtr && !g_sysutilPaused) {
                 g_appPtr->audio.mixStereoFloat(dst, AUDIO_BLOCK_SAMPLES);
             } else {
                 memset(dst, 0, AUDIO_BLOCK_SAMPLES * 2 * sizeof(float));
@@ -295,6 +302,19 @@ static void readPads(PadState pads[2]) {
 static float s_rumbleTimer[2] = {0.0f, 0.0f};
 static bool s_rumbleActive[2] = {false, false};
 
+static void stopAllRumble() {
+    padActParam offAct;
+    memset(&offAct, 0, sizeof(offAct));
+    offAct.small_motor = 0;
+    offAct.large_motor = 0;
+    ioPadSetActDirect(0, &offAct);
+    ioPadSetActDirect(1, &offAct);
+    s_rumbleActive[0] = false;
+    s_rumbleActive[1] = false;
+    s_rumbleTimer[0] = 0.0f;
+    s_rumbleTimer[1] = 0.0f;
+}
+
 static void drainRumble(App& app, double dt) {
     for (auto& ev : app.rumbleQueue) {
         if (ev.pad < 0 || ev.pad > 1) continue;
@@ -350,6 +370,19 @@ int main(int /*argc*/, char** /*argv*/) {
         PadState pads[2];
 
         while (g_running) {
+            sysUtilCheckCallback();
+
+            if (g_sysutilPaused) {
+                // XMB overlay is open: stop rumble, skip update/render, and
+                // keep lastTime fresh so dt does not spike on resume.
+                stopAllRumble();
+                usleep(16000);
+                u64 pSec = 0, pNsec = 0;
+                sysGetCurrentTime(&pSec, &pNsec);
+                lastTime = (double)pSec + (double)pNsec * 1e-9;
+                continue;
+            }
+
             u64 sec = 0, nsec = 0;
             sysGetCurrentTime(&sec, &nsec);
             double now = (double)sec + (double)nsec * 1e-9;
@@ -383,11 +416,11 @@ int main(int /*argc*/, char** /*argv*/) {
             flipFrame(g_ctx, fbIdx);
             fbIdx ^= 1;
             setRenderTarget(g_ctx, fbIdx);
-
-            sysUtilCheckCallback();
         }
 
         // Cleanup
+        sysUtilUnregisterCallback(SYSUTIL_EVENT_SLOT0);
+
         if (g_audioRunning) {
             g_audioRunning = 0;
             u64 retval = 0;
