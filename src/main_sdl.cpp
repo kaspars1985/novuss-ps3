@@ -130,6 +130,8 @@ struct Frontend {
             p.r2 = SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 8000;
             p.start = btn(SDL_CONTROLLER_BUTTON_START);
             p.select = btn(SDL_CONTROLLER_BUTTON_BACK);
+            p.l3 = btn(SDL_CONTROLLER_BUTTON_LEFTSTICK);
+            p.r3 = btn(SDL_CONTROLLER_BUTTON_RIGHTSTICK);
         }
     }
 
@@ -152,6 +154,7 @@ struct Frontend {
         if (k(SDL_SCANCODE_TAB)) p.select = true;
         if (k(SDL_SCANCODE_M)) p.start = true;
         if (k(SDL_SCANCODE_R)) p.square = true;
+        if (k(SDL_SCANCODE_F3) || k(SDL_SCANCODE_P)) p.r3 = true;
     }
 
     void drainRumble() {
@@ -226,8 +229,18 @@ struct Frontend {
             double dt = static_cast<double>(now - prev) / SDL_GetPerformanceFrequency();
             prev = now;
             if (dt > 0.1) dt = 0.1;
+
+            Uint64 u0 = SDL_GetPerformanceCounter();
             step(dt);
+            Uint64 u1 = SDL_GetPerformanceCounter();
+            float updateMs = static_cast<float>((u1 - u0) * 1000.0 / SDL_GetPerformanceFrequency());
+
+            Uint64 r0 = SDL_GetPerformanceCounter();
             renderFrame();
+            Uint64 r1 = SDL_GetPerformanceCounter();
+            float renderMs = static_cast<float>((r1 - r0) * 1000.0 / SDL_GetPerformanceFrequency());
+
+            app.profiler.update(static_cast<float>(dt), renderMs, updateMs, 0);
         }
         shutdown();
         return 0;

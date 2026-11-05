@@ -341,6 +341,24 @@ void App::render(uint32_t* fb, int w, int h, int stride) {
             : "X: izvēlēties · []: dzēst · START: saglabāt · O: atcelt";
         drawText(fb, w, h, stride, w / 2, cy + ch - (int)(22 * ui), kbHint, COL_DIM, 1.0f * ui, 1);
     }
+
+    // 10. On-screen performance and memory profiler overlay.
+    if (profiler.enabled) {
+        char buf[128];
+        float memMb = (float)profiler.heapBytes / (1024.0f * 1024.0f);
+        std::snprintf(buf, sizeof(buf), "FPS: %.1f (%.1fms) | CPU: %.1fms | REN: %.1fms | MEM: %.1fMB",
+                      (double)profiler.fps, (double)profiler.frameTimeMs,
+                      (double)profiler.updateTimeMs, (double)profiler.renderTimeMs,
+                      (double)memMb);
+        int tw = textWidth(buf, 1.0f * ui);
+        int bw = tw + (int)(20 * ui);
+        int bh = (int)(22 * ui);
+        int bx = w - padX - bw;
+        int by = padY + (int)(4 * ui);
+        fillRoundRect(fb, w, h, stride, bx, by, bw, bh, (int)(6 * ui), 0xCC0A0806u);
+        strokeRoundRect(fb, w, h, stride, bx, by, bw, bh, (int)(6 * ui), 1, COL_GOLD);
+        drawText(fb, w, h, stride, bx + (int)(10 * ui), by + (int)(4 * ui), buf, COL_GOLD, 1.0f * ui, 0);
+    }
 }
 
 } // namespace Novuss

@@ -280,6 +280,8 @@ static void readPads(PadState pads[2]) {
         pads[i].r2       = d.BTN_R2 != 0;
         pads[i].start    = d.BTN_START != 0;
         pads[i].select   = d.BTN_SELECT != 0;
+        pads[i].l3       = d.BTN_L3 != 0;
+        pads[i].r3       = d.BTN_R3 != 0;
     }
 }
 
@@ -353,10 +355,24 @@ int main(int /*argc*/, char** /*argv*/) {
             if (dt < 0.0) dt = 0.0;
 
             readPads(pads);
+
+            u64 u0Sec = 0, u0Nsec = 0;
+            sysGetCurrentTime(&u0Sec, &u0Nsec);
             app.update(dt, pads);
             drainRumble(app, dt);
+            u64 u1Sec = 0, u1Nsec = 0;
+            sysGetCurrentTime(&u1Sec, &u1Nsec);
+            float updateMs = (float)((u1Sec - u0Sec) * 1000.0 + (u1Nsec - u0Nsec) * 1e-6);
 
+            u64 r0Sec = 0, r0Nsec = 0;
+            sysGetCurrentTime(&r0Sec, &r0Nsec);
             app.render(g_ramFb, g_width, g_height, g_width);
+            u64 r1Sec = 0, r1Nsec = 0;
+            sysGetCurrentTime(&r1Sec, &r1Nsec);
+            float renderMs = (float)((r1Sec - r0Sec) * 1000.0 + (r1Nsec - r0Nsec) * 1e-6);
+
+            struct mallinfo mi = mallinfo();
+            app.profiler.update((float)dt, renderMs, updateMs, (uint32_t)mi.uordblks);
 
             waitFlip();
             memcpy(g_fbPtr[fbIdx], g_ramFb, g_fbSize);

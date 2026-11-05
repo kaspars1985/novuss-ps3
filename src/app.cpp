@@ -97,6 +97,18 @@ static std::string trim(const std::string& s) {
 
 } // namespace
 
+void ProfilerStats::update(float dt, float renderMs, float updateMs, uint32_t heap) {
+    const float alpha = 0.1f;
+    const float beta = 1.0f - alpha;
+    if (dt > 0.0f) {
+        frameTimeMs = frameTimeMs * beta + (dt * 1000.0f) * alpha;
+    }
+    if (frameTimeMs > 0.001f) fps = 1000.0f / frameTimeMs;
+    renderTimeMs = renderTimeMs * beta + renderMs * alpha;
+    updateTimeMs = updateTimeMs * beta + updateMs * alpha;
+    heapBytes = heap;
+}
+
 App::App() {
     loadSettings();
 
@@ -108,6 +120,8 @@ App::App() {
     names[1] = (settings.mode == "ai")
                    ? I18n::tr(settings.lang, "computer")
                    : (settings.p2Name.empty() ? I18n::tr(settings.lang, "p2") : settings.p2Name);
+
+    profiler.enabled = settings.perf;
 
     audio.setEnabled(settings.sound);
     try {
@@ -161,6 +175,8 @@ void App::loadSettings() {
             settings.log = (val == "1" || val == "true");
         } else if (key == "sound") {
             settings.sound = (val == "1" || val == "true");
+        } else if (key == "perf") {
+            settings.perf = (val == "1" || val == "true");
         } else if (key == "p1Name") {
             settings.p1Name = val;
         } else if (key == "p2Name") {
@@ -187,6 +203,7 @@ void App::saveSettings() {
     std::fprintf(f, "guide=%d\n", settings.guide ? 1 : 0);
     std::fprintf(f, "log=%d\n", settings.log ? 1 : 0);
     std::fprintf(f, "sound=%d\n", settings.sound ? 1 : 0);
+    std::fprintf(f, "perf=%d\n", settings.perf ? 1 : 0);
     std::fprintf(f, "p1Name=%s\n", settings.p1Name.c_str());
     std::fprintf(f, "p2Name=%s\n", settings.p2Name.c_str());
 
@@ -452,6 +469,13 @@ void App::update(double dt, const PadState pads[2]) {
     auto anyPressed = [&](bool PadState::*field) -> bool {
         return pressed(0, field) || pressed(1, field);
     };
+
+    // Toggle on-screen profiler overlay anytime with R3.
+    if (anyPressed(&PadState::r3)) {
+        profiler.enabled = !profiler.enabled;
+        settings.perf = profiler.enabled;
+        saveSettings();
+    }
 
     // ---- Name editor overlay ----
     if (nameEditOpen) {

@@ -20,6 +20,7 @@ struct PadState {
     bool cross = false, circle = false, square = false, triangle = false;
     bool l1 = false, r1 = false, l2 = false, r2 = false;
     bool start = false, select = false;
+    bool l3 = false, r3 = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -45,6 +46,20 @@ struct Settings {
     bool sound = true;
     std::string p1Name = "";
     std::string p2Name = "";
+    bool perf = false;
+};
+
+// ---------------------------------------------------------------------------
+// On-screen performance / memory profiler stats.
+// ---------------------------------------------------------------------------
+struct ProfilerStats {
+    float fps = 60.0f;
+    float frameTimeMs = 16.6f;
+    float renderTimeMs = 0.0f;
+    float updateTimeMs = 0.0f;
+    uint32_t heapBytes = 0;
+    bool enabled = false;
+    void update(float dt, float renderMs, float updateMs, uint32_t heap);
 };
 
 // ---------------------------------------------------------------------------
@@ -137,6 +152,7 @@ public:
     std::vector<RumbleEvent> rumbleQueue;
     uint32_t rngSeed = 0x12345678u;
     PadState prevPads[2];
+    ProfilerStats profiler;
 
     App();
     ~App();
