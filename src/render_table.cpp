@@ -97,8 +97,7 @@ static uint32_t evalDiscPixel(double dx, double dy, double r, double holeR, int 
     else { c0 = 0xFFFBEDCFu; c1 = 0xFFE6CB93u; c2 = 0xFFB38750u; }
 
     // Radial gradient (top -> bottom).
-    double t = (dy + r) / (2.0 * r);
-    if (t < 0.0) t = 0.0; if (t > 1.0) t = 1.0;
+    double t = std::clamp((dy + r) / (2.0 * r), 0.0, 1.0);
     uint32_t col;
     if (t < 0.5) col = lerpColor(c0, c1, t * 2.0);
     else col = lerpColor(c1, c2, (t - 0.5) * 2.0);
@@ -252,8 +251,7 @@ static void buildBoardTexture(std::vector<uint32_t>& tex, int size, double scale
                 // Rich mahogany wood grain formula
                 double grain = std::sin(primaryAxis * 0.14 + std::sin(secondaryAxis * 0.45) * 2.2);
                 double fineGrain = std::sin(primaryAxis * 0.40 + std::sin(secondaryAxis * 0.90) * 1.5);
-                double g = 0.50 + 0.35 * grain + 0.15 * fineGrain;
-                if (g < 0.0) g = 0.0; if (g > 1.0) g = 1.0;
+                double g = std::clamp(0.50 + 0.35 * grain + 0.15 * fineGrain, 0.0, 1.0);
 
                 uint32_t wood = lerpColor(0xFF632B15u, 0xFF3F170Au, g);
 
@@ -285,8 +283,7 @@ static void buildBoardTexture(std::vector<uint32_t>& tex, int size, double scale
                 // Natural Baltic birch: longitudinal grain fibers running parallel to Y axis
                 double grain = std::sin(by * 0.085 + std::sin(bx * 0.018) * 3.6 + std::sin((bx + by) * 0.004) * 4.5);
                 double fiber = std::sin(by * 0.38 + std::sin(bx * 0.12) * 1.8);
-                double g = 0.50 + 0.34 * grain + 0.16 * fiber;
-                if (g < 0.0) g = 0.0; if (g > 1.0) g = 1.0;
+                double g = std::clamp(0.50 + 0.34 * grain + 0.16 * fiber, 0.0, 1.0);
 
                 uint32_t wood = lerpColor(0xFFF6EBD5u, 0xFFE5CEABu, g);
 

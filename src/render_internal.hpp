@@ -34,10 +34,10 @@ inline uint32_t lerpColor(uint32_t a, uint32_t b, double t) {
     int rr = ar + (int)((br - ar) * t + 0.5);
     int rg = ag + (int)((bg - ag) * t + 0.5);
     int rb = ab + (int)((bb - ab) * t + 0.5);
-    if (ra < 0) ra = 0; if (ra > 255) ra = 255;
-    if (rr < 0) rr = 0; if (rr > 255) rr = 255;
-    if (rg < 0) rg = 0; if (rg > 255) rg = 255;
-    if (rb < 0) rb = 0; if (rb > 255) rb = 255;
+    ra = std::clamp(ra, 0, 255);
+    rr = std::clamp(rr, 0, 255);
+    rg = std::clamp(rg, 0, 255);
+    rb = std::clamp(rb, 0, 255);
     return ((uint32_t)ra << 24) | ((uint32_t)rr << 16) | ((uint32_t)rg << 8) | (uint32_t)rb;
 }
 
