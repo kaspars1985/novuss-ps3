@@ -104,23 +104,41 @@ void App::render(uint32_t* fb, int w, int h, int stride) {
         strokeRoundRect(fb, w, h, stride, px, py, pw, ph, (int)(10 * ui), 1, COL_CARD_EDGE);
         drawText(fb, w, h, stride, px + (int)(12 * ui), py + (int)(10 * ui),
                  I18n::tr(lang, "logTitle"), COL_GOLD, 1.0f * ui, 0);
+
+        static std::vector<std::string> s_cachedLogLines;
+        static size_t s_cachedLogCount = ~0u;
+        static std::string s_cachedLogLang;
+        static int s_cachedLogW = 0;
+
+        int logWrapW = pw - (int)(24 * ui);
+        if (s_cachedLogCount != matchLog.size() || s_cachedLogLang != lang || s_cachedLogW != logWrapW) {
+            s_cachedLogLines.clear();
+            int start = std::max(0, (int)matchLog.size() - 14);
+            for (int i = start; i < (int)matchLog.size(); ++i) {
+                const LogEntry& e = matchLog[i];
+                std::string key = e.hasRes ? e.res.k : e.k;
+                int who = e.hasRes ? (e.res.winner >= 0 ? e.res.winner : e.shooter) : e.who;
+                std::string line = I18n::tr(lang, key,
+                    {{"name", nameOf(who)}, {"n", i2s(e.n)}});
+                auto wrapped = wrapText(line, logWrapW, 1.0f * ui);
+                for (auto& ln : wrapped) s_cachedLogLines.push_back(std::move(ln));
+                s_cachedLogLines.push_back(""); // newline separator
+            }
+            s_cachedLogCount = matchLog.size();
+            s_cachedLogLang = lang;
+            s_cachedLogW = logWrapW;
+        }
+
         int ty = py + (int)(34 * ui);
         int lineStep = (int)(16 * ui);
-        int start = std::max(0, (int)matchLog.size() - 14);
-        for (int i = start; i < (int)matchLog.size(); ++i) {
-            const LogEntry& e = matchLog[i];
-            std::string key = e.hasRes ? e.res.k : e.k;
-            int who = e.hasRes ? (e.res.winner >= 0 ? e.res.winner : e.shooter) : e.who;
-            std::string line = I18n::tr(lang, key,
-                {{"name", nameOf(who)}, {"n", i2s(e.n)}});
-            auto wrapped = wrapText(line, pw - (int)(24 * ui), 1.0f * ui);
-            for (auto& ln : wrapped) {
-                if (ty > py + ph - (int)(18 * ui)) break;
+        for (const auto& ln : s_cachedLogLines) {
+            if (ty > py + ph - (int)(18 * ui)) break;
+            if (ln.empty()) {
+                ty += (int)(4 * ui);
+            } else {
                 drawText(fb, w, h, stride, px + (int)(12 * ui), ty, ln, COL_TEXT, 1.0f * ui, 0);
                 ty += lineStep;
             }
-            ty += (int)(4 * ui);
-            if (ty > py + ph - (int)(18 * ui)) break;
         }
     }
 
@@ -168,38 +186,45 @@ void App::render(uint32_t* fb, int w, int h, int stride) {
         drawText(fb, w, h, stride, w / 2, cy + (int)(52 * ui), I18n::tr(lang, "tagline"),
                  COL_DIM, 1.0f * ui, 1);
 
-        std::vector<std::pair<std::string, std::string>> rows = {
-            {I18n::tr(lang, "opponent"), settings.mode == "ai" ? I18n::tr(lang, "vsAI") : I18n::tr(lang, "vsHuman")},
-            {I18n::tr(lang, "level"), I18n::tr(lang, settings.level)},
-            {I18n::tr(lang, "match"), settings.sets == 1 ? I18n::tr(lang, "sets1") : (settings.sets == 2 ? I18n::tr(lang, "sets3") : I18n::tr(lang, "sets5"))},
-            {I18n::tr(lang, "p1"), nameOf(0) + " [X]"},
-            {I18n::tr(lang, "p2"), (settings.mode == "ai" ? I18n::tr(lang, "computer") : (nameOf(1) + " [X]"))},
-            {I18n::tr(lang, "guide"), settings.guide ? "ON" : "OFF"},
-            {I18n::tr(lang, "hints"), settings.hints ? "ON" : "OFF"},
-            {I18n::tr(lang, "language"), settings.lang == "lv" ? "Latviešu" : "English"},
-            {I18n::tr(lang, "sound"), settings.sound ? "ON" : "OFF"},
-            {I18n::tr(lang, "start"), ""},
-            {I18n::tr(lang, "resume"), ""},
-            {I18n::tr(lang, "rules"), ""},
-        };
+        // Immediate-mode row drawing: no per-frame std::vector allocation.
         int ry = cy + (int)(76 * ui);
         int rh = (int)(26 * ui);
         int rowStep = (int)(29 * ui);
-        for (int i = 0; i < (int)rows.size(); ++i) {
-            if (i == menuRow) {
+        int rowIdx = 0;
+        auto drawRow = [&](const std::string& label, const std::string& value) {
+            if (rowIdx == menuRow) {
                 fillRoundRect(fb, w, h, stride, cx + (int)(20 * ui), ry - (int)(3 * ui),
                               cw - (int)(40 * ui), rh, (int)(6 * ui), COL_ROW_SEL);
                 strokeRoundRect(fb, w, h, stride, cx + (int)(20 * ui), ry - (int)(3 * ui),
                                 cw - (int)(40 * ui), rh, (int)(6 * ui), 1, COL_GOLD);
             }
-            uint32_t col = (i == menuRow) ? COL_GOLD : COL_TEXT;
+            uint32_t col = (rowIdx == menuRow) ? COL_GOLD : COL_TEXT;
             drawText(fb, w, h, stride, cx + (int)(36 * ui), ry + (int)(4 * ui),
-                     rows[i].first, col, 1.0f * ui, 0);
-            if (!rows[i].second.empty())
+                     label, col, 1.0f * ui, 0);
+            if (!value.empty())
                 drawText(fb, w, h, stride, cx + cw - (int)(36 * ui), ry + (int)(4 * ui),
-                         rows[i].second, col, 1.0f * ui, 2);
+                         value, col, 1.0f * ui, 2);
             ry += rowStep;
-        }
+            ++rowIdx;
+        };
+
+        drawRow(I18n::tr(lang, "opponent"),
+                settings.mode == "ai" ? I18n::tr(lang, "vsAI") : I18n::tr(lang, "vsHuman"));
+        drawRow(I18n::tr(lang, "level"), I18n::tr(lang, settings.level));
+        drawRow(I18n::tr(lang, "match"),
+                settings.sets == 1 ? I18n::tr(lang, "sets1")
+                                   : (settings.sets == 2 ? I18n::tr(lang, "sets3")
+                                                         : I18n::tr(lang, "sets5")));
+        drawRow(I18n::tr(lang, "p1"), nameOf(0) + " [X]");
+        drawRow(I18n::tr(lang, "p2"),
+                settings.mode == "ai" ? I18n::tr(lang, "computer") : (nameOf(1) + " [X]"));
+        drawRow(I18n::tr(lang, "guide"), settings.guide ? "ON" : "OFF");
+        drawRow(I18n::tr(lang, "hints"), settings.hints ? "ON" : "OFF");
+        drawRow(I18n::tr(lang, "language"), settings.lang == "lv" ? "Latviešu" : "English");
+        drawRow(I18n::tr(lang, "sound"), settings.sound ? "ON" : "OFF");
+        drawRow(I18n::tr(lang, "start"), "");
+        drawRow(I18n::tr(lang, "resume"), "");
+        drawRow(I18n::tr(lang, "rules"), "");
 
         std::string credits = (lang == "lv")
             ? "laacz.lv (novuss.didnt.work) · PS3 ports: ciematnieks.lv"
@@ -224,13 +249,35 @@ void App::render(uint32_t* fb, int w, int h, int stride) {
         int headStep = (int)(20 * ui);
         int lineStep = (int)(16 * ui);
         int secGap = (int)(12 * ui);
+
+        // Cache wrapped rules lines keyed by (lang, wrap width).
+        struct RulesCache {
+            std::string lang;
+            int wrapW = -1;
+            std::vector<std::vector<std::string>> lines;
+        };
+        static RulesCache s_rulesCache;
+
+        int rulesWrapW = cw - (int)(64 * ui);
         const auto& secs = I18n::rules(lang);
-        for (const auto& s : secs) {
+        if (s_rulesCache.lang != lang || s_rulesCache.wrapW != rulesWrapW ||
+            s_rulesCache.lines.size() != secs.size()) {
+            s_rulesCache.lines.clear();
+            s_rulesCache.lines.reserve(secs.size());
+            for (const auto& s : secs) {
+                s_rulesCache.lines.push_back(wrapText(s.body, rulesWrapW, 1.0f * ui));
+            }
+            s_rulesCache.lang = lang;
+            s_rulesCache.wrapW = rulesWrapW;
+        }
+
+        for (size_t si = 0; si < secs.size(); ++si) {
+            const auto& s = secs[si];
             if (ty >= clipTop && ty + headStep <= clipBot)
                 drawText(fb, w, h, stride, cx + (int)(24 * ui), ty, s.heading, COL_GOLD, 1.0f * ui, 0);
             ty += headStep;
-            auto lines = wrapText(s.body, cw - (int)(64 * ui), 1.0f * ui);
-            for (auto& ln : lines) {
+            const auto& lines = s_rulesCache.lines[si];
+            for (const auto& ln : lines) {
                 if (ty >= clipTop && ty + lineStep <= clipBot)
                     drawText(fb, w, h, stride, cx + (int)(24 * ui), ty, ln, COL_TEXT, 1.0f * ui, 0);
                 ty += lineStep;
@@ -267,10 +314,21 @@ void App::render(uint32_t* fb, int w, int h, int stride) {
         strokeRoundRect(fb, w, h, stride, cx, cy, cw, ch, (int)(14 * ui), 2, COL_GOLD);
         drawText(fb, w, h, stride, w / 2, cy + (int)(24 * ui), resultTitle, COL_GOLD, 1.5f * ui, 1);
         drawText(fb, w, h, stride, w / 2, cy + (int)(64 * ui), resultScore, COL_TEXT, 1.0f * ui, 1);
-        auto lines = wrapText(resultText, cw - (int)(48 * ui), 1.0f * ui);
+
+        // Cache wrapped result text keyed by (resultText, wrap width).
+        static std::string s_resultCacheText;
+        static int s_resultCacheW = -1;
+        static std::vector<std::string> s_resultCacheLines;
+        int resultWrapW = cw - (int)(48 * ui);
+        if (s_resultCacheText != resultText || s_resultCacheW != resultWrapW) {
+            s_resultCacheLines = wrapText(resultText, resultWrapW, 1.0f * ui);
+            s_resultCacheText = resultText;
+            s_resultCacheW = resultWrapW;
+        }
+
         int ty = cy + (int)(96 * ui);
         int lineStep = (int)(16 * ui);
-        for (auto& ln : lines) {
+        for (const auto& ln : s_resultCacheLines) {
             drawText(fb, w, h, stride, w / 2, ty, ln, COL_DIM, 1.0f * ui, 1);
             ty += lineStep;
         }
