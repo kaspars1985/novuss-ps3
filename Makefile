@@ -4,7 +4,7 @@ CXXFLAGS ?= -std=c++17 -O2 -Wall -Wextra -Wno-deprecated-declarations -Isrc
 SDL_CFLAGS := $(shell sdl2-config --cflags)
 SDL_LIBS := $(shell sdl2-config --libs)
 
-CORE_SRCS := src/game_sim.cpp src/game_rules.cpp src/game_ai.cpp src/audio.cpp src/i18n.cpp src/font.cpp src/app.cpp src/render_table.cpp src/render_ui.cpp
+CORE_SRCS := src/game_sim.cpp src/game_rules.cpp src/game_ai.cpp src/audio.cpp src/i18n.cpp src/font.cpp src/savedata.cpp src/app.cpp src/render_table.cpp src/render_ui.cpp
 TEST_SRCS := src/game_sim.cpp src/game_rules.cpp src/game_ai.cpp src/audio.cpp src/i18n.cpp src/font.cpp tests/test_game.cpp
 
 BUILD_DIR := build

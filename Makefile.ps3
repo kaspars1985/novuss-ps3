@@ -49,6 +49,7 @@ SOURCES := \
 	src/audio.cpp \
 	src/i18n.cpp \
 	src/font.cpp \
+	src/savedata.cpp \
 	src/app.cpp \
 	src/render_table.cpp \
 	src/render_ui.cpp \

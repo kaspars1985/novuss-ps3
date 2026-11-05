@@ -6,9 +6,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <sstream>
 #include <string>
 
 #include "i18n.hpp"
+#include "savedata.hpp"
 
 namespace Novuss {
 
@@ -187,6 +189,55 @@ void App::stopAIThread() {
 }
 
 void App::loadSettings() {
+    auto parseIni = [&](const std::string& content) {
+        std::istringstream stream(content);
+        std::string line;
+        while (std::getline(stream, line)) {
+            line = trim(line);
+            if (line.empty() || line[0] == '#' || line[0] == ';' || line[0] == '[') continue;
+            size_t eq = line.find('=');
+            if (eq == std::string::npos) continue;
+            std::string key = trim(line.substr(0, eq));
+            std::string val = trim(line.substr(eq + 1));
+            if (key.empty()) continue;
+
+            if (key == "lang") {
+                if (val == "lv" || val == "en") settings.lang = val;
+            } else if (key == "mode") {
+                if (val == "ai" || val == "hotseat") settings.mode = val;
+            } else if (key == "level") {
+                if (val == "easy" || val == "medium" || val == "hard") settings.level = val;
+            } else if (key == "sets") {
+                int v = std::atoi(val.c_str());
+                if (v >= 1 && v <= 3) settings.sets = v;
+            } else if (key == "hints") {
+                settings.hints = (val == "1" || val == "true");
+            } else if (key == "guide") {
+                settings.guide = (val == "1" || val == "true");
+            } else if (key == "log") {
+                settings.log = (val == "1" || val == "true");
+            } else if (key == "sound") {
+                settings.sound = (val == "1" || val == "true");
+            } else if (key == "shotControl") {
+                if (val == "both" || val == "button" || val == "stick") settings.shotControl = val;
+            } else if (key == "perf") {
+                settings.perf = (val == "1" || val == "true");
+            } else if (key == "p1Name") {
+                settings.p1Name = val;
+            } else if (key == "p2Name") {
+                settings.p2Name = val;
+            }
+        }
+    };
+
+    // 1. Try native PS3 savedata utility.
+    std::string nativeIni;
+    if (Savedata::load(nativeIni)) {
+        parseIni(nativeIni);
+        return;
+    }
+
+    // 2. Fallback to file paths (dev/desktop/legacy).
     FILE* f = nullptr;
     for (const char* p : kSettingsPaths) {
         f = std::fopen(p, "r");
@@ -194,47 +245,37 @@ void App::loadSettings() {
     }
     if (!f) return;
 
+    std::string fileContent;
     char buf[512];
     while (std::fgets(buf, sizeof(buf), f)) {
-        std::string line = trim(buf);
-        if (line.empty() || line[0] == '#' || line[0] == ';' || line[0] == '[') continue;
-        size_t eq = line.find('=');
-        if (eq == std::string::npos) continue;
-        std::string key = trim(line.substr(0, eq));
-        std::string val = trim(line.substr(eq + 1));
-        if (key.empty()) continue;
-
-        if (key == "lang") {
-            if (val == "lv" || val == "en") settings.lang = val;
-        } else if (key == "mode") {
-            if (val == "ai" || val == "hotseat") settings.mode = val;
-        } else if (key == "level") {
-            if (val == "easy" || val == "medium" || val == "hard") settings.level = val;
-        } else if (key == "sets") {
-            int v = std::atoi(val.c_str());
-            if (v >= 1 && v <= 3) settings.sets = v;
-        } else if (key == "hints") {
-            settings.hints = (val == "1" || val == "true");
-        } else if (key == "guide") {
-            settings.guide = (val == "1" || val == "true");
-        } else if (key == "log") {
-            settings.log = (val == "1" || val == "true");
-        } else if (key == "sound") {
-            settings.sound = (val == "1" || val == "true");
-        } else if (key == "shotControl") {
-            if (val == "both" || val == "button" || val == "stick") settings.shotControl = val;
-        } else if (key == "perf") {
-            settings.perf = (val == "1" || val == "true");
-        } else if (key == "p1Name") {
-            settings.p1Name = val;
-        } else if (key == "p2Name") {
-            settings.p2Name = val;
-        }
+        fileContent += buf;
     }
     std::fclose(f);
+    parseIni(fileContent);
 }
 
 void App::saveSettings() {
+    std::ostringstream ss;
+    ss << "# Novuss settings\n";
+    ss << "lang=" << settings.lang << "\n";
+    ss << "mode=" << settings.mode << "\n";
+    ss << "level=" << settings.level << "\n";
+    ss << "sets=" << settings.sets << "\n";
+    ss << "hints=" << (settings.hints ? 1 : 0) << "\n";
+    ss << "guide=" << (settings.guide ? 1 : 0) << "\n";
+    ss << "log=" << (settings.log ? 1 : 0) << "\n";
+    ss << "sound=" << (settings.sound ? 1 : 0) << "\n";
+    ss << "shotControl=" << settings.shotControl << "\n";
+    ss << "perf=" << (settings.perf ? 1 : 0) << "\n";
+    ss << "p1Name=" << settings.p1Name << "\n";
+    ss << "p2Name=" << settings.p2Name << "\n";
+
+    std::string iniContent = ss.str();
+
+    // 1. Native PS3 savedata utility.
+    Savedata::save(iniContent);
+
+    // 2. Fallback to raw filesystem paths.
     FILE* f = nullptr;
     for (const char* p : kSettingsPaths) {
         f = std::fopen(p, "w");
@@ -242,20 +283,7 @@ void App::saveSettings() {
     }
     if (!f) return;
 
-    std::fprintf(f, "# Novuss settings\n");
-    std::fprintf(f, "lang=%s\n", settings.lang.c_str());
-    std::fprintf(f, "mode=%s\n", settings.mode.c_str());
-    std::fprintf(f, "level=%s\n", settings.level.c_str());
-    std::fprintf(f, "sets=%d\n", settings.sets);
-    std::fprintf(f, "hints=%d\n", settings.hints ? 1 : 0);
-    std::fprintf(f, "guide=%d\n", settings.guide ? 1 : 0);
-    std::fprintf(f, "log=%d\n", settings.log ? 1 : 0);
-    std::fprintf(f, "sound=%d\n", settings.sound ? 1 : 0);
-    std::fprintf(f, "shotControl=%s\n", settings.shotControl.c_str());
-    std::fprintf(f, "perf=%d\n", settings.perf ? 1 : 0);
-    std::fprintf(f, "p1Name=%s\n", settings.p1Name.c_str());
-    std::fprintf(f, "p2Name=%s\n", settings.p2Name.c_str());
-
+    std::fwrite(iniContent.data(), 1, iniContent.size(), f);
     std::fflush(f);
     std::fclose(f);
 }
