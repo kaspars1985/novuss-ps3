@@ -221,6 +221,8 @@ void App::loadSettings() {
             settings.log = (val == "1" || val == "true");
         } else if (key == "sound") {
             settings.sound = (val == "1" || val == "true");
+        } else if (key == "shotControl") {
+            if (val == "both" || val == "button" || val == "stick") settings.shotControl = val;
         } else if (key == "perf") {
             settings.perf = (val == "1" || val == "true");
         } else if (key == "p1Name") {
@@ -249,6 +251,7 @@ void App::saveSettings() {
     std::fprintf(f, "guide=%d\n", settings.guide ? 1 : 0);
     std::fprintf(f, "log=%d\n", settings.log ? 1 : 0);
     std::fprintf(f, "sound=%d\n", settings.sound ? 1 : 0);
+    std::fprintf(f, "shotControl=%s\n", settings.shotControl.c_str());
     std::fprintf(f, "perf=%d\n", settings.perf ? 1 : 0);
     std::fprintf(f, "p1Name=%s\n", settings.p1Name.c_str());
     std::fprintf(f, "p2Name=%s\n", settings.p2Name.c_str());
@@ -620,7 +623,7 @@ void App::update(double dt, const PadState pads[2]) {
                 resultOpen = false;
                 menuOpen = true;
                 audio.setMenuMusic(true);
-                menuRow = 9; // Highlight 'New match' ('Jauna spēle') row in menu
+                menuRow = 10; // Highlight 'New match' ('Jauna spēle') row in menu
                 phase = Phase::Menu;
             } else {
                 resultOpen = false;
@@ -640,38 +643,49 @@ void App::update(double dt, const PadState pads[2]) {
     // ---- Pause overlay ----
     if (pauseOpen) {
         if (anyPressed(&PadState::up)) {
-            pauseRow = (pauseRow + 4) % 5;
+            pauseRow = (pauseRow + 5) % 6;
         }
         if (anyPressed(&PadState::down)) {
-            pauseRow = (pauseRow + 1) % 5;
+            pauseRow = (pauseRow + 1) % 6;
         }
-        if (anyPressed(&PadState::cross) || anyPressed(&PadState::start)) {
-            if (pauseRow == 0) {
+        bool pauseLeft = anyPressed(&PadState::left);
+        bool pauseRight = anyPressed(&PadState::right);
+        if (anyPressed(&PadState::cross) || anyPressed(&PadState::start) || pauseLeft || pauseRight) {
+            if (pauseRow == 0 && (anyPressed(&PadState::cross) || anyPressed(&PadState::start))) {
                 // Resume
                 pauseOpen = false;
-            } else if (pauseRow == 1) {
+            } else if (pauseRow == 1 && (anyPressed(&PadState::cross) || anyPressed(&PadState::start))) {
                 // Restart set
                 pauseOpen = false;
                 SetResult sr;
                 sr.replay = true;
                 game.nextSet(sr);
                 beginTurn(true);
-            } else if (pauseRow == 2) {
+            } else if (pauseRow == 2 && (anyPressed(&PadState::cross) || anyPressed(&PadState::start))) {
                 // Rules
                 rulesOpen = true;
                 rulesScroll = 0;
             } else if (pauseRow == 3) {
+                // Shot control (Both / Button / Stick)
+                int dir = pauseLeft ? -1 : 1;
+                static const char* scOpts[] = {"both", "button", "stick"};
+                int cur = 0;
+                for (int i = 0; i < 3; ++i) if (settings.shotControl == scOpts[i]) cur = i;
+                cur = (cur + dir + 3) % 3;
+                settings.shotControl = scOpts[cur];
+                saveSettings();
+            } else if (pauseRow == 4 && (anyPressed(&PadState::cross) || anyPressed(&PadState::start) || pauseLeft || pauseRight)) {
                 // Sound
                 settings.sound = !settings.sound;
                 audio.setEnabled(settings.sound);
                 saveSettings();
-            } else if (pauseRow == 4) {
+            } else if (pauseRow == 5 && (anyPressed(&PadState::cross) || anyPressed(&PadState::start))) {
                 // Exit to Main Menu
                 pauseOpen = false;
                 menuOpen = true;
                 phase = Phase::Menu;
                 audio.setMenuMusic(true);
-                menuRow = 9;
+                menuRow = 10;
             }
         }
         if (anyPressed(&PadState::circle)) {
@@ -685,10 +699,10 @@ void App::update(double dt, const PadState pads[2]) {
     // ---- Menu navigation ----
     if (menuOpen) {
         if (anyPressed(&PadState::up)) {
-            menuRow = (menuRow + 11) % 12;
+            menuRow = (menuRow + 12) % 13;
         }
         if (anyPressed(&PadState::down)) {
-            menuRow = (menuRow + 1) % 12;
+            menuRow = (menuRow + 1) % 13;
         }
         bool left = anyPressed(&PadState::left);
         bool right = anyPressed(&PadState::right);
@@ -747,10 +761,18 @@ void App::update(double dt, const PadState pads[2]) {
                 settings.hints = !settings.hints;
                 helpersHints = settings.hints;
                 break;
-            case 7:
+            case 7: {
+                static const char* scOpts[] = {"both", "button", "stick"};
+                int idx = 0;
+                for (int i = 0; i < 3; ++i) if (settings.shotControl == scOpts[i]) idx = i;
+                idx = (idx + dir + 3) % 3;
+                settings.shotControl = scOpts[idx];
+                break;
+            }
+            case 8:
                 settings.lang = (settings.lang == "lv") ? "en" : "lv";
                 break;
-            case 8:
+            case 9:
                 settings.sound = !settings.sound;
                 audio.setEnabled(settings.sound);
                 break;
@@ -778,15 +800,15 @@ void App::update(double dt, const PadState pads[2]) {
                 nameEditBuf = nameOf(1);
                 nameEditRow = 0;
                 nameEditCol = 0;
-            } else if (menuRow == 9) {
-                startMatch();
             } else if (menuRow == 10) {
+                startMatch();
+            } else if (menuRow == 11) {
                 if (phase == Phase::Menu) startMatch();
                 else {
                     menuOpen = false;
                     audio.setMenuMusic(false);
                 }
-            } else if (menuRow == 11) {
+            } else if (menuRow == 12) {
                 rulesOpen = true;
                 rulesScroll = 0;
             } else {
@@ -911,8 +933,12 @@ void App::update(double dt, const PadState pads[2]) {
             rulesScroll = 0;
         }
 
+        // Shot control mode check.
+        bool buttonAllowed = (settings.shotControl != "stick");
+        bool stickAllowed = (settings.shotControl != "button");
+
         // Charging via button (Cross or R2).
-        bool chargeHeld = pad.cross || pad.r2;
+        bool chargeHeld = buttonAllowed && (pad.cross || pad.r2);
         if (chargeHeld) {
             if (!charging) {
                 charging = true;
@@ -937,9 +963,10 @@ void App::update(double dt, const PadState pads[2]) {
             }
             charging = false;
             aimPower = 0;
-        } else {
-            // Analog cue pull-back via right stick (down) or left stick (down).
-            float pull = (pad.ry > 0.15f) ? pad.ry : ((pad.ly > 0.15f) ? pad.ly : 0.0f);
+        } else if (stickAllowed) {
+            // Analog cue pull-back via right stick (down) ONLY.
+            // Left stick strictly controls aim angle to eliminate accidental shots.
+            float pull = (pad.ry > 0.15f) ? pad.ry : 0.0f;
             if (pull > 0.15f) {
                 aimPower = std::min(1.0, (double)pull);
             } else if (prevRy >= 0.15f && pull < 0.10f) {
@@ -957,6 +984,8 @@ void App::update(double dt, const PadState pads[2]) {
                 aimPower = 0;
             }
             prevRy = pull;
+        } else {
+            prevRy = 0.0f;
         }
 
         if (pad.circle && !prevPads[padIdx].circle && charging) {

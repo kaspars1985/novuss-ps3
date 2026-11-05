@@ -178,7 +178,7 @@ void App::render(uint32_t* fb, int w, int h, int stride) {
 
     // 6. Menu overlay.
     if (menuOpen) {
-        int cw = (int)(520 * ui), ch = (int)(470 * ui);
+        int cw = (int)(520 * ui), ch = (int)(495 * ui);
         int cx = w / 2 - cw / 2, cy = h / 2 - ch / 2;
         fillRoundRect(fb, w, h, stride, cx, cy, cw, ch, (int)(14 * ui), COL_CARD);
         strokeRoundRect(fb, w, h, stride, cx, cy, cw, ch, (int)(14 * ui), 2, COL_GOLD);
@@ -220,6 +220,12 @@ void App::render(uint32_t* fb, int w, int h, int stride) {
                 settings.mode == "ai" ? I18n::tr(lang, "computer") : (nameOf(1) + " [X]"));
         drawRow(I18n::tr(lang, "guide"), settings.guide ? "ON" : "OFF");
         drawRow(I18n::tr(lang, "hints"), settings.hints ? "ON" : "OFF");
+        std::string scLabel = (settings.shotControl == "stick")
+                                  ? I18n::tr(lang, "ctrlStick")
+                                  : ((settings.shotControl == "button")
+                                         ? I18n::tr(lang, "ctrlButton")
+                                         : I18n::tr(lang, "ctrlBoth"));
+        drawRow(I18n::tr(lang, "shotControl"), scLabel);
         drawRow(I18n::tr(lang, "language"), settings.lang == "lv" ? "Latviešu" : "English");
         drawRow(I18n::tr(lang, "sound"), settings.sound ? "ON" : "OFF");
         drawRow(I18n::tr(lang, "start"), "");
@@ -235,7 +241,7 @@ void App::render(uint32_t* fb, int w, int h, int stride) {
     // 6b. In-Game Pause overlay.
     if (pauseOpen) {
         fillRect(fb, w, h, stride, 0, 0, w, h, 0x80000000u);
-        int cw = (int)(420 * ui), ch = (int)(290 * ui);
+        int cw = (int)(420 * ui), ch = (int)(325 * ui);
         int cx = w / 2 - cw / 2, cy = h / 2 - ch / 2;
         fillRoundRect(fb, w, h, stride, cx, cy, cw, ch, (int)(14 * ui), COL_CARD);
         strokeRoundRect(fb, w, h, stride, cx, cy, cw, ch, (int)(14 * ui), 2, COL_GOLD);
@@ -265,9 +271,16 @@ void App::render(uint32_t* fb, int w, int h, int stride) {
             ++rowIdx;
         };
 
+        std::string scLabel = (settings.shotControl == "stick")
+                                  ? I18n::tr(lang, "ctrlStick")
+                                  : ((settings.shotControl == "button")
+                                         ? I18n::tr(lang, "ctrlButton")
+                                         : I18n::tr(lang, "ctrlBoth"));
+
         drawPauseRow(I18n::tr(lang, "resume"), "");
         drawPauseRow(I18n::tr(lang, "restartSet"), "");
         drawPauseRow(I18n::tr(lang, "rules"), "");
+        drawPauseRow(I18n::tr(lang, "shotControl"), scLabel);
         drawPauseRow(I18n::tr(lang, "sound"), settings.sound ? "ON" : "OFF");
         drawPauseRow(I18n::tr(lang, "toMenu"), "");
 

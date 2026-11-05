@@ -342,6 +342,9 @@ static void testI18n() {
     begin("i18n");
     std::string ph = I18n::tr("lv", "placeHint");
     CHECK(!ph.empty());
+    CHECK(I18n::tr("lv", "shotControl") == "Sitiena vadība");
+    CHECK(I18n::tr("lv", "ctrlBoth") == "Abi (X / R-Stick)");
+    CHECK(I18n::tr("en", "shotControl") == "Shot control");
     std::string db = I18n::tr("lv", "debtBadge", {{"n", "3"}});
     CHECK(db.find("3") != std::string::npos);
     CHECK(db.find("{n}") == std::string::npos);

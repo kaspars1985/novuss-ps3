@@ -45,7 +45,7 @@ const Dict& englishStrings() {
         {"yourShot", "{name} to shoot"},
         {"thinking", "{name} is thinking…"},
         {"placeHint", "D-Pad / R-Stick: move striker · L-Stick: aim angle · "
-                      "L1/R1: fine aim · hold X/R2: charge power scale · O: cancel"},
+                      "L1/R1: fine aim · hold X/R2 or R-Stick: shoot · O: cancel"},
         {"power", "Power {n}%"},
         {"aimBad", "cue over the corner — not allowed"},
         {"debtBadge", "debt {n}"},
@@ -120,6 +120,10 @@ const Dict& englishStrings() {
         {"logTitle", "Game log"},
         {"guide", "Aim line"},
         {"hints", "Dark puck hints"},
+        {"shotControl", "Shot control"},
+        {"ctrlBoth", "Both (X / R-Stick)"},
+        {"ctrlButton", "Button (X / R2)"},
+        {"ctrlStick", "Right stick"},
         {"setHeader", "Set {n}"},
         {"helpers", "Helpers"},
         {"none", "none"},
@@ -165,8 +169,8 @@ const Dict& latvianStrings() {
         {"yourShot", "Sit: {name}"},
         {"thinking", "{name} domā…"},
         {"placeHint", "Krusts / R-Stick: pārvietot sitēju · L-Stick: mērķēt "
-                      "leņķi · L1/R1: precīza mērķēšana · turēt X/R2: uzlādēt "
-                      "spēka skalu · O: atcelt"},
+                      "leņķi · L1/R1: precīza mērķēšana · turēt X/R2 vai R-Stick: "
+                      "sist · O: atcelt"},
         {"power", "Spēks {n}%"},
         {"aimBad", "kija aizsedz stūri — nedrīkst"},
         {"debtBadge", "parāds {n}"},
@@ -246,6 +250,10 @@ const Dict& latvianStrings() {
         {"logTitle", "Spēles žurnāls"},
         {"guide", "Tēmēšanas līnija"},
         {"hints", "Tumšo kauliņu padomi"},
+        {"shotControl", "Sitiena vadība"},
+        {"ctrlBoth", "Abi (X / R-Stick)"},
+        {"ctrlButton", "Poga (X / R2)"},
+        {"ctrlStick", "Labais puļķis"},
         {"setHeader", "{n}. sets"},
         {"helpers", "Palīgi"},
         {"none", "nav"},

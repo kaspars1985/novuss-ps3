@@ -51,6 +51,7 @@ struct Settings {
     bool guide = true;
     bool log = true;
     bool sound = true;
+    std::string shotControl = "both"; // "both", "button", "stick"
     std::string p1Name = "";
     std::string p2Name = "";
     bool perf = false;
@@ -110,7 +111,7 @@ public:
     int pauseRow = 0;
     bool rulesOpen = false;
     bool resultOpen = false;
-    int menuRow = 0; // 0: Opponent (AI/2P), 1: Level (Easy/Med/Hard), 2: Match (1/3/5), 3: P1 Name, 4: P2 Name, 5: Guide, 6: Hints, 7: Language (LV/EN), 8: Sound, 9: Start Match, 10: Resume, 11: Rules
+    int menuRow = 0; // 0: Opponent (AI/2P), 1: Level (Easy/Med/Hard), 2: Match (1/3/5), 3: P1 Name, 4: P2 Name, 5: Guide, 6: Hints, 7: Shot Control (Both/Btn/Stick), 8: Language (LV/EN), 9: Sound, 10: Start Match, 11: Resume, 12: Rules
     bool nameEditOpen = false;
     int nameEditPlayer = 0;
     std::string nameEditBuf;
