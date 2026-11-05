@@ -4,6 +4,13 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <atomic>
+#if defined(__PPU__) || defined(__PS3__)
+#include <sys/thread.h>
+#include <lv2/thread.h>
+#else
+#include <thread>
+#endif
 
 #include "audio.hpp"
 #include "game.hpp"
@@ -132,7 +139,15 @@ public:
     std::vector<SimEvent> simEvents;
     AIPlanner aiPlanner;
     double aiTimer = 0;
-    bool aiHasShot = false;
+    std::atomic<bool> aiHasShot{false};
+    std::atomic<bool> aiThreadRunning{false};
+#if defined(__PPU__) || defined(__PS3__)
+    sys_ppu_thread_t aiThreadId = 0;
+#else
+    std::thread aiThread;
+#endif
+    void startAIThread();
+    void stopAIThread();
     ShotResult aiShot;
     struct AIAnim {
         double fromX, fromY, toX, toY, dirX, dirY, power, t;

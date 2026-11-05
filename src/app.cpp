@@ -137,7 +137,53 @@ App::App() {
 }
 
 App::~App() {
+    stopAIThread();
     saveSettings();
+}
+
+void App::startAIThread() {
+    stopAIThread();
+    aiHasShot = false;
+    aiThreadRunning = true;
+#if defined(__PPU__) || defined(__PS3__)
+    char thrName[] = "novuss_ai";
+    sysThreadCreate(&aiThreadId, [](void* arg) {
+        App* self = static_cast<App*>(arg);
+        while (self->aiThreadRunning && !self->aiPlanner.done()) {
+            if (self->aiPlanner.step(16)) break;
+        }
+        self->aiShot = self->aiPlanner.result();
+        self->aiHasShot = true;
+        self->aiThreadRunning = false;
+        sysThreadExit(0);
+    }, this, 1500, 0x10000, THREAD_JOINABLE, thrName);
+#else
+    aiThread = std::thread([this]() {
+        while (aiThreadRunning && !aiPlanner.done()) {
+            if (aiPlanner.step(16)) break;
+        }
+        aiShot = aiPlanner.result();
+        aiHasShot = true;
+        aiThreadRunning = false;
+    });
+#endif
+}
+
+void App::stopAIThread() {
+    if (aiThreadRunning.load() || aiHasShot.load()) {
+        aiThreadRunning = false;
+#if defined(__PPU__) || defined(__PS3__)
+        if (aiThreadId != 0) {
+            u64 ret = 0;
+            sysThreadJoin(aiThreadId, &ret);
+            aiThreadId = 0;
+        }
+#else
+        if (aiThread.joinable()) {
+            aiThread.join();
+        }
+#endif
+    }
 }
 
 void App::loadSettings() {
@@ -257,6 +303,7 @@ void App::startMatch() {
                    ? I18n::tr(settings.lang, "computer")
                    : (settings.p2Name.empty() ? I18n::tr(settings.lang, "p2") : settings.p2Name);
 
+    stopAIThread();
     hasLastPlace[0] = hasLastPlace[1] = false;
     effects.clear();
     toasts.clear();
@@ -342,9 +389,9 @@ void App::beginTurn(bool fresh) {
     if (mode == "ai" && p == 1) {
         phase = Phase::AI;
         aiTimer = 0;
-        aiHasShot = false;
         rngSeed += 0x9E3779B9u;
         aiPlanner.init(game.clone(), level, rngSeed);
+        startAIThread();
     } else {
         phase = Phase::Place;
     }
@@ -427,6 +474,7 @@ void App::showResult(const SetResult& res, int shooter) {
         title = I18n::tr(settings.lang, "matchWon", {{"name", nameOf(game.winner)}});
     }
 
+    stopAIThread();
     hasLastPlace[0] = hasLastPlace[1] = false;
 
     resultTitle = title;
@@ -979,29 +1027,26 @@ void App::update(double dt, const PadState pads[2]) {
     // ---- AI ----
     if (phase == Phase::AI) {
         aiTimer += dt;
-        if (!aiHasShot) {
-            if (aiPlanner.step(8) || aiPlanner.done()) {
-                aiShot = aiPlanner.result();
-                aiHasShot = true;
-                aiTimer = 0;
-                // Prepare animation.
-                aiAnim.fromX = strikerX;
-                aiAnim.fromY = strikerY;
-                aiAnim.toX = aiShot.x;
-                aiAnim.toY = aiShot.y;
-                double sp = hyp(aiShot.vx, aiShot.vy);
-                if (sp > 1e-6) {
-                    aiAnim.dirX = aiShot.vx / sp;
-                    aiAnim.dirY = aiShot.vy / sp;
-                } else {
-                    aiAnim.dirX = 0;
-                    aiAnim.dirY = -1;
-                }
-                aiAnim.power = speedToPower(sp);
-                aiAnim.t = 0;
-                aiAnim.shot = aiShot;
-                phase = Phase::AIAnim;
+        if (aiHasShot.load()) {
+            stopAIThread();
+            aiTimer = 0;
+            // Prepare animation.
+            aiAnim.fromX = strikerX;
+            aiAnim.fromY = strikerY;
+            aiAnim.toX = aiShot.x;
+            aiAnim.toY = aiShot.y;
+            double sp = hyp(aiShot.vx, aiShot.vy);
+            if (sp > 1e-6) {
+                aiAnim.dirX = aiShot.vx / sp;
+                aiAnim.dirY = aiShot.vy / sp;
+            } else {
+                aiAnim.dirX = 0;
+                aiAnim.dirY = -1;
             }
+            aiAnim.power = speedToPower(sp);
+            aiAnim.t = 0;
+            aiAnim.shot = aiShot;
+            phase = Phase::AIAnim;
         }
     }
 

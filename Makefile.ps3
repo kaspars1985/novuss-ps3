@@ -61,7 +61,7 @@ OBJECTS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(SOURCES))
 # ---------------------------------------------------------------------------
 PPU_CXXFLAGS := -std=gnu++17 -O2 -Wall -mcpu=cell \
 	-mhard-float -fmodulo-sched -ffunction-sections -fdata-sections \
-	-D_GLIBCXX11_USE_C99_STDIO \
+	-D_GLIBCXX11_USE_C99_STDIO -D__PS3__ \
 	-MMD -MP \
 	-I$(PSL1GHT)/ppu/include \
 	-I$(PS3DEV)/portlibs/ppu/include \

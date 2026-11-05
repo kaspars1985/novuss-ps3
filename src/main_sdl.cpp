@@ -279,6 +279,7 @@ struct Frontend {
         saveBMP("build/screen_match.bmp");
 
         // Audio pipeline sanity check
+        app.audio.trigger("cue", 1.0);
         std::vector<float> buf(1024 * 2, 0.0f);
         app.audio.mixStereoFloat(buf.data(), 1024);
         float peak = 0.0f;
