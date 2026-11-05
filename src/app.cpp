@@ -328,6 +328,7 @@ void App::beginTurn(bool fresh) {
     aimPower = 0;
     aimShown = 0;
     aimAngle = 0;
+    prevRy = 0.0;
 
     flipDir(game.sides[p], std::sin(aimAngle), -std::cos(aimAngle), aimDir[0], aimDir[1]);
     aimValid = game.canAim(p, strikerX, strikerY, aimDir[0], aimDir[1]);
@@ -740,7 +741,7 @@ void App::update(double dt, const PadState pads[2]) {
         if (pad.left) mx -= 1;
         if (pad.right) mx += 1;
         if (std::fabs(pad.rx) > 0.18) mx += pad.rx;
-        if (std::fabs(pad.ry) > 0.18) my += pad.ry;
+        if (pad.ry < -0.18) my += pad.ry;
 
         if (mx != 0 || my != 0) {
             double len = std::sqrt(mx * mx + my * my);
@@ -809,7 +810,7 @@ void App::update(double dt, const PadState pads[2]) {
             rulesScroll = 0;
         }
 
-        // Charging.
+        // Charging via button (Cross or R2).
         bool chargeHeld = pad.cross || pad.r2;
         if (chargeHeld) {
             if (!charging) {
@@ -822,7 +823,7 @@ void App::update(double dt, const PadState pads[2]) {
             if (aimPower >= 1.0) { aimPower = 1.0; chargeDir = -1.0; }
             if (aimPower <= 0.0) { aimPower = 0.0; chargeDir = 1.0; }
         } else if (charging) {
-            // Released.
+            // Released button charge.
             if (!chargeCancelled && aimPower >= 0.02) {
                 if (aimValid) {
                     double speed = powerToSpeed(aimPower);
@@ -835,6 +836,26 @@ void App::update(double dt, const PadState pads[2]) {
             }
             charging = false;
             aimPower = 0;
+        } else {
+            // Analog cue pull-back via right stick (down) or left stick (down).
+            float pull = (pad.ry > 0.15f) ? pad.ry : ((pad.ly > 0.15f) ? pad.ly : 0.0f);
+            if (pull > 0.15f) {
+                aimPower = std::min(1.0, (double)pull);
+            } else if (prevRy >= 0.15f && pull < 0.10f) {
+                // Released analog pull: fire.
+                if (aimPower >= 0.02) {
+                    if (aimValid) {
+                        double speed = powerToSpeed(aimPower);
+                        double vx = aimDir[0] * speed;
+                        double vy = aimDir[1] * speed;
+                        fire(strikerX, strikerY, vx, vy);
+                    } else {
+                        addToast(I18n::tr(settings.lang, "invalidAim"), "warn");
+                    }
+                }
+                aimPower = 0;
+            }
+            prevRy = pull;
         }
 
         if (pad.circle && !prevPads[padIdx].circle && charging) {

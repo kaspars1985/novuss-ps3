@@ -123,6 +123,7 @@ public:
     bool charging = false;
     double chargeDir = 1.0;
     bool chargeCancelled = false;
+    double prevRy = 0.0;
     bool hasLastPlace[2] = {false, false};
     double lastPlace[2][2] = {{0, 0}, {0, 0}};
     std::unique_ptr<Sim> sim;

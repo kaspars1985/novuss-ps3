@@ -228,7 +228,8 @@ struct Frontend {
             Uint64 now = SDL_GetPerformanceCounter();
             double dt = static_cast<double>(now - prev) / SDL_GetPerformanceFrequency();
             prev = now;
-            if (dt > 0.1) dt = 0.1;
+            if (dt > 0.05) dt = 0.05;
+            if (dt < 0.0) dt = 0.0;
 
             Uint64 u0 = SDL_GetPerformanceCounter();
             step(dt);

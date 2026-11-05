@@ -453,7 +453,9 @@ bool Sim::atRest() const {
 }
 
 void Sim::advance(double dt) {
+    if (dt > 0.05) dt = 0.05;
     acc += dt;
+    if (acc > 0.1) acc = 0.1;
     while (acc >= C::DT) {
         acc -= C::DT;
         if (atRest()) {

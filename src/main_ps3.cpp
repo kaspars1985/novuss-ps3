@@ -439,7 +439,7 @@ int main(int /*argc*/, char** /*argv*/) {
             double now = (double)sec + (double)nsec * 1e-9;
             double dt = now - lastTime;
             lastTime = now;
-            if (dt > 0.1) dt = 0.1;
+            if (dt > 0.05) dt = 0.05;
             if (dt < 0.0) dt = 0.0;
 
             readPads(pads);
