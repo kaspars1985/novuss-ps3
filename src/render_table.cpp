@@ -166,6 +166,39 @@ static void buildDiscSprite(DiscSprite& sp, double r, double holeR, int kindIdx)
 }
 
 // ---------------------------------------------------------------------------
+// buildShadowSprite: pre-renders a warm soft drop shadow cast by a piece.
+// ---------------------------------------------------------------------------
+static void buildShadowSprite(DiscSprite& sp, double r, double holeR) {
+    int half = (int)std::ceil((r + 1.5) * 1.18 + 3.0);
+    int size = half * 2 + 1;
+    sp.size = size;
+    sp.half = half;
+    sp.r = r;
+    sp.px.assign((size_t)size * size, 0u);
+    for (int iy = 0; iy < size; ++iy) {
+        for (int ix = 0; ix < size; ++ix) {
+            double dx = ix - half;
+            double dy = iy - half;
+            double d = std::sqrt(dx * dx + dy * dy);
+            double outerCov = (r + 0.8) + 0.5 - d;
+            if (outerCov <= 0.0) continue;
+            if (outerCov > 1.0) outerCov = 1.0;
+            double innerCov = 1.0;
+            if (holeR > 0.5) {
+                innerCov = d - (holeR - 0.5);
+                if (innerCov <= 0.0) continue;
+                if (innerCov > 1.0) innerCov = 1.0;
+            }
+            double cov = outerCov * innerCov;
+            uint32_t a = (uint32_t)(cov * 0x48); // warm translucent shadow
+            if (a > 0) {
+                sp.px[(size_t)iy * size + ix] = (a << 24) | 0x00180E06u;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // drawDisc: renders a single disc directly into the framebuffer.
 // ---------------------------------------------------------------------------
 static void drawDisc(uint32_t* fb, int w, int h, int stride, double sx, double sy,
@@ -371,6 +404,7 @@ void renderTableAndPieces(const App& app, uint32_t* fb, int w, int h, int stride
     static int s_boardSize = 0;
     static double s_boardScale = 0.0;
     static DiscSprite s_discs[3];
+    static DiscSprite s_shadows[2];
     static double s_discScale = 0.0;
 
     int boardSize = (int)std::ceil(1090.0 * v.scale);
@@ -383,11 +417,13 @@ void renderTableAndPieces(const App& app, uint32_t* fb, int w, int h, int stride
         s_boardScale = v.scale;
     }
 
-    // Disc sprites: rebuild only when scale changes.
+    // Disc & shadow sprites: rebuild only when scale changes.
     if (std::fabs(s_discScale - v.scale) > 1e-4) {
         buildDiscSprite(s_discs[0], C::PUCK_R * v.scale, C::PUCK_HOLE_R * v.scale, 0);
         buildDiscSprite(s_discs[1], C::PUCK_R * v.scale, C::PUCK_HOLE_R * v.scale, 1);
         buildDiscSprite(s_discs[2], C::STRIKER_R * v.scale, C::STRIKER_HOLE_R * v.scale, 2);
+        buildShadowSprite(s_shadows[0], C::PUCK_R * v.scale, C::PUCK_HOLE_R * v.scale);
+        buildShadowSprite(s_shadows[1], C::STRIKER_R * v.scale, C::STRIKER_HOLE_R * v.scale);
         s_discScale = v.scale;
     }
 
@@ -502,8 +538,16 @@ void renderTableAndPieces(const App& app, uint32_t* fb, int w, int h, int stride
         fillRect(fb, w, h, stride, rx, ry, rw, rh, 0x14D4AF37u);
     }
 
-    // 5. Pucks & Striker.
+    // 5. Pucks & Striker (with directional drop shadows).
+    double shOffset = std::max(1.8, 2.4 * v.scale);
     if (app.sim) {
+        // Shadow pass
+        for (const Body& b : app.sim->bodies) {
+            if (!b.on) continue;
+            v.toScreen(b.x, b.y, sx, sy);
+            blitDiscSprite(fb, w, h, stride, sx, sy + shOffset, s_shadows[b.striker ? 1 : 0]);
+        }
+        // Piece pass
         for (const Body& b : app.sim->bodies) {
             if (!b.on) continue;
             v.toScreen(b.x, b.y, sx, sy);
@@ -511,6 +555,17 @@ void renderTableAndPieces(const App& app, uint32_t* fb, int w, int h, int stride
             blitDiscSprite(fb, w, h, stride, sx, sy, s_discs[kindIdx]);
         }
     } else {
+        // Shadow pass
+        for (const Puck& k : g.pucks) {
+            if (!k.on) continue;
+            v.toScreen(k.x, k.y, sx, sy);
+            blitDiscSprite(fb, w, h, stride, sx, sy + shOffset, s_shadows[0]);
+        }
+        if (app.hasStriker) {
+            v.toScreen(app.strikerX, app.strikerY, sx, sy);
+            blitDiscSprite(fb, w, h, stride, sx, sy + shOffset, s_shadows[1]);
+        }
+        // Piece pass
         for (const Puck& k : g.pucks) {
             if (!k.on) continue;
             v.toScreen(k.x, k.y, sx, sy);
