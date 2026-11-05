@@ -33,9 +33,6 @@ static u32 g_pitch = 0;
 static void* g_hostAddr = nullptr;
 static u32 g_fbSize = 0;
 
-static u32 g_depthPitch = 0;
-static u32 g_depthOffset = 0;
-static void* g_depthBuffer = nullptr;
 static uint32_t* g_ramFb = nullptr;
 
 // Audio state
@@ -106,8 +103,8 @@ static void setRenderTarget(gcmContextData* ctx, int idx) {
     sf.colorPitch[3] = 64;
     sf.depthFormat = GCM_SURFACE_ZETA_Z16;
     sf.depthLocation = GCM_LOCATION_RSX;
-    sf.depthOffset = g_depthOffset;
-    sf.depthPitch = g_depthPitch;
+    sf.depthOffset = 0;
+    sf.depthPitch = 64;
     sf.type = GCM_SURFACE_TYPE_LINEAR;
     sf.antiAlias = GCM_SURFACE_CENTER_1;
     sf.width = g_width;
@@ -123,7 +120,11 @@ static void setRenderTarget(gcmContextData* ctx, int idx) {
 static int initVideo() {
     g_hostAddr = memalign(1024 * 1024, 32 * 1024 * 1024);
     if (!g_hostAddr) return -1;
-    if (rsxInit(&g_ctx, 0x100000, 32 * 1024 * 1024, g_hostAddr) != 0) return -1;
+    if (rsxInit(&g_ctx, 0x100000, 32 * 1024 * 1024, g_hostAddr) != 0) {
+        free(g_hostAddr);
+        g_hostAddr = nullptr;
+        return -1;
+    }
 
     videoState state;
     if (videoGetState(0, 0, &state) != 0) return -1;
@@ -171,23 +172,26 @@ static int initVideo() {
 
     gcmSetFlipMode(GCM_FLIP_VSYNC);
 
-    g_depthPitch = g_width * 2;
-    g_depthBuffer = rsxMemalign(64, (g_height * 2) * g_depthPitch);
-    if (!g_depthBuffer) return -1;
-    rsxAddressToOffset(g_depthBuffer, &g_depthOffset);
-
     gcmResetFlipStatus();
 
     g_fbSize = g_height * g_pitch;
     for (int i = 0; i < 2; ++i) {
         g_fbPtr[i] = rsxMemalign(64, g_fbSize);
-        if (!g_fbPtr[i]) return -1;
+        if (!g_fbPtr[i]) {
+            if (g_fbPtr[0]) { rsxFree(g_fbPtr[0]); g_fbPtr[0] = nullptr; }
+            if (g_fbPtr[1]) { rsxFree(g_fbPtr[1]); g_fbPtr[1] = nullptr; }
+            return -1;
+        }
         rsxAddressToOffset(g_fbPtr[i], &g_fbOffset[i]);
         gcmSetDisplayBuffer(i, g_fbOffset[i], g_pitch, g_width, g_height);
     }
 
     g_ramFb = (uint32_t*)memalign(64, g_fbSize);
-    if (!g_ramFb) return -1;
+    if (!g_ramFb) {
+        if (g_fbPtr[0]) { rsxFree(g_fbPtr[0]); g_fbPtr[0] = nullptr; }
+        if (g_fbPtr[1]) { rsxFree(g_fbPtr[1]); g_fbPtr[1] = nullptr; }
+        return -1;
+    }
     memset(g_ramFb, 0, g_fbSize);
 
     flipFrame(g_ctx, 0);
@@ -446,6 +450,12 @@ int main(int /*argc*/, char** /*argv*/) {
         ioPadEnd();
         gcmSetWaitFlip(g_ctx);
         rsxFinish(g_ctx, 1);
+
+        // Free RSX VRAM and host memory now that the RSX is idle.
+        if (g_fbPtr[0]) { rsxFree(g_fbPtr[0]); g_fbPtr[0] = nullptr; }
+        if (g_fbPtr[1]) { rsxFree(g_fbPtr[1]); g_fbPtr[1] = nullptr; }
+        if (g_ramFb) { free(g_ramFb); g_ramFb = nullptr; }
+        if (g_hostAddr) { free(g_hostAddr); g_hostAddr = nullptr; }
         return 0;
     } catch (...) {
         return 1;
