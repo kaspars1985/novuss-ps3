@@ -1,6 +1,10 @@
-// Native Sony PlayStation 3 frontend for Novuss::App (PSL1GHT SDK v2 + Tiny3D RSX).
+// Native Sony PlayStation 3 frontend for Novuss::App (PSL1GHT SDK v2).
 #include <ppu-lv2.h>
 #include <sysutil/sysutil.h>
+#include <sysutil/video.h>
+#include <rsx/rsx.h>
+#include <rsx/gcm_sys.h>
+#include <rsx/commands.h>
 #include <io/pad.h>
 #include <audio/audio.h>
 #include <sys/systime.h>
@@ -13,7 +17,7 @@
 #include <cmath>
 
 #include "app.hpp"
-#include "render_tiny3d.hpp"
+#include "font.hpp"
 
 using namespace Novuss;
 
@@ -22,6 +26,15 @@ using namespace Novuss;
 // ---------------------------------------------------------------------------
 static volatile int g_running = 1;
 static volatile int g_sysutilPaused = 0;
+static gcmContextData* g_ctx = nullptr;
+static void* g_fbPtr[2] = {nullptr, nullptr};
+static u32 g_fbOffset[2] = {0, 0};
+static int g_width = 1280, g_height = 720;
+static u32 g_pitch = 0;
+static void* g_hostAddr = nullptr;
+static u32 g_fbSize = 0;
+
+static uint32_t* g_ramFb = nullptr;
 
 // Audio state
 static u32 g_audioPort = 0;
@@ -57,6 +70,138 @@ static void onSysutilEvent(u64 status, u64 /*param*/, void* /*usrdata*/) {
         default:
             break;
     }
+}
+
+// ---------------------------------------------------------------------------
+// RSX helpers (libNoRSX / NoRSXutil pattern)
+// ---------------------------------------------------------------------------
+static void waitFlip() {
+    while (gcmGetFlipStatus() != 0) usleep(300);
+    gcmResetFlipStatus();
+}
+
+static int flipFrame(gcmContextData* context, s32 buffer) {
+    if (gcmSetFlip(context, buffer) == 0) {
+        rsxFlushBuffer(context);
+        gcmSetWaitFlip(context);
+        return 1;
+    }
+    return 0;
+}
+
+static void setRenderTarget(gcmContextData* ctx, int idx) {
+    gcmSurface sf;
+    memset(&sf, 0, sizeof(sf));
+    sf.colorFormat = GCM_SURFACE_X8R8G8B8;
+    sf.colorTarget = GCM_SURFACE_TARGET_0;
+    sf.colorLocation[0] = GCM_LOCATION_RSX;
+    sf.colorLocation[1] = GCM_LOCATION_RSX;
+    sf.colorLocation[2] = GCM_LOCATION_RSX;
+    sf.colorLocation[3] = GCM_LOCATION_RSX;
+    sf.colorOffset[0] = g_fbOffset[idx];
+    sf.colorOffset[1] = 0;
+    sf.colorOffset[2] = 0;
+    sf.colorOffset[3] = 0;
+    sf.colorPitch[0] = g_pitch;
+    sf.colorPitch[1] = 64;
+    sf.colorPitch[2] = 64;
+    sf.colorPitch[3] = 64;
+    sf.depthFormat = GCM_SURFACE_ZETA_Z16;
+    sf.depthLocation = GCM_LOCATION_RSX;
+    sf.depthOffset = 0;
+    sf.depthPitch = 64;
+    sf.type = GCM_SURFACE_TYPE_LINEAR;
+    sf.antiAlias = GCM_SURFACE_CENTER_1;
+    sf.width = g_width;
+    sf.height = g_height;
+    sf.x = 0;
+    sf.y = 0;
+    rsxSetSurface(ctx, &sf);
+}
+
+// ---------------------------------------------------------------------------
+// Video init
+// ---------------------------------------------------------------------------
+static int initVideo() {
+    g_hostAddr = memalign(1024 * 1024, 32 * 1024 * 1024);
+    if (!g_hostAddr) return -1;
+    if (rsxInit(&g_ctx, 0x100000, 32 * 1024 * 1024, g_hostAddr) != 0) {
+        free(g_hostAddr);
+        g_hostAddr = nullptr;
+        return -1;
+    }
+
+    videoState state;
+    if (videoGetState(0, 0, &state) != 0) return -1;
+
+    // Prefer 720p so the PPU->RSX framebuffer copy is 3.68 MB instead of
+    // 8.29 MB; the PS3 hardware scales to the TV.
+    u32 resId = VIDEO_RESOLUTION_720;
+    g_width = 1280;
+    g_height = 720;
+    g_pitch = g_width * 4;
+
+    // Synchronize RSX backend before reconfiguring video.
+    rsxSetWriteBackendLabel(g_ctx, 255, 1);
+    rsxSetWaitLabel(g_ctx, 255, 1);
+    rsxSetWriteBackendLabel(g_ctx, 255, 2);
+    rsxFlushBuffer(g_ctx);
+    while (*(vu32*)gcmGetLabelAddress(255) != 2) usleep(30);
+
+    videoConfiguration vcfg;
+    memset(&vcfg, 0, sizeof(vcfg));
+    vcfg.resolution = resId;
+    vcfg.format = VIDEO_BUFFER_FORMAT_XRGB;
+    vcfg.aspect = state.displayMode.aspect;
+    vcfg.pitch = g_pitch;
+    if (videoConfigure(0, &vcfg, nullptr, 0) != 0) {
+        // Fall back to the display's native resolution.
+        videoResolution res;
+        if (videoGetResolution(state.displayMode.resolution, &res) == 0) {
+            g_width = res.width;
+            g_height = res.height;
+        } else {
+            g_width = 1280;
+            g_height = 720;
+        }
+        g_pitch = g_width * 4;
+
+        memset(&vcfg, 0, sizeof(vcfg));
+        vcfg.resolution = state.displayMode.resolution;
+        vcfg.format = VIDEO_BUFFER_FORMAT_XRGB;
+        vcfg.aspect = state.displayMode.aspect;
+        vcfg.pitch = g_pitch;
+        if (videoConfigure(0, &vcfg, nullptr, 0) != 0) return -1;
+    }
+    if (videoGetState(0, 0, &state) != 0) return -1;
+
+    gcmSetFlipMode(GCM_FLIP_VSYNC);
+
+    gcmResetFlipStatus();
+
+    g_fbSize = g_height * g_pitch;
+    for (int i = 0; i < 2; ++i) {
+        g_fbPtr[i] = rsxMemalign(64, g_fbSize);
+        if (!g_fbPtr[i]) {
+            if (g_fbPtr[0]) { rsxFree(g_fbPtr[0]); g_fbPtr[0] = nullptr; }
+            if (g_fbPtr[1]) { rsxFree(g_fbPtr[1]); g_fbPtr[1] = nullptr; }
+            return -1;
+        }
+        rsxAddressToOffset(g_fbPtr[i], &g_fbOffset[i]);
+        gcmSetDisplayBuffer(i, g_fbOffset[i], g_pitch, g_width, g_height);
+    }
+
+    g_ramFb = (uint32_t*)memalign(64, g_fbSize);
+    if (!g_ramFb) {
+        if (g_fbPtr[0]) { rsxFree(g_fbPtr[0]); g_fbPtr[0] = nullptr; }
+        if (g_fbPtr[1]) { rsxFree(g_fbPtr[1]); g_fbPtr[1] = nullptr; }
+        return -1;
+    }
+    memset(g_ramFb, 0, g_fbSize);
+
+    flipFrame(g_ctx, 0);
+    setRenderTarget(g_ctx, 0);
+    return 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -256,7 +401,7 @@ static void drainRumble(App& app, double dt) {
 // ---------------------------------------------------------------------------
 int main(int /*argc*/, char** /*argv*/) {
     try {
-        if (!RenderTiny3D::init(1280, 720)) return 1;
+        if (initVideo() != 0) return 1;
         if (ioPadInit(7) != 0) return 1;
 
         // Initialize persistent pad snapshots to neutral.
@@ -264,9 +409,20 @@ int main(int /*argc*/, char** /*argv*/) {
 
         sysUtilRegisterCallback(SYSUTIL_EVENT_SLOT0, onSysutilEvent, nullptr);
 
+        // Display branded boot splash screen while loading audio & board texture.
+        for (int i = 0; i < g_width * g_height; ++i) g_ramFb[i] = 0xFF140E0Au;
+        Render::drawText(g_ramFb, g_width, g_height, g_width, g_width / 2, g_height / 2 - 20, "NOVUSS", 0xFFE8C070u, 2.0f, 1);
+        Render::drawText(g_ramFb, g_width, g_height, g_width, g_width / 2, g_height / 2 + 24, "Iel\xC4\x81" "d\xC4\x93...", 0xFF9A8C7Au, 1.0f, 1);
+        memcpy(g_fbPtr[0], g_ramFb, g_fbSize);
+        flipFrame(g_ctx, 0);
+
         App app;
+
         initAudio(&app); // non-fatal if it fails
 
+        // initVideo() already flipped buffer 0, so buffer 0 is being displayed
+        // and buffer 1 is the free backbuffer.
+        int fbIdx = 1;
         u64 lastSec = 0, lastNsec = 0;
         sysGetCurrentTime(&lastSec, &lastNsec);
         double lastTime = (double)lastSec + (double)lastNsec * 1e-9;
@@ -276,9 +432,13 @@ int main(int /*argc*/, char** /*argv*/) {
             sysUtilCheckCallback();
 
             if (g_sysutilPaused) {
-                // XMB overlay is open: stop rumble, skip update/render, and
-                // keep lastTime fresh so dt does not spike on resume.
+                // XMB overlay is open: stop rumble, skip update/render, but
+                // keep the RSX flip queue alive so the XMB does not deadlock.
                 stopAllRumble();
+                waitFlip();
+                flipFrame(g_ctx, fbIdx);
+                fbIdx ^= 1;
+                setRenderTarget(g_ctx, fbIdx);
                 usleep(16000);
                 u64 pSec = 0, pNsec = 0;
                 sysGetCurrentTime(&pSec, &pNsec);
@@ -306,13 +466,19 @@ int main(int /*argc*/, char** /*argv*/) {
 
             u64 r0Sec = 0, r0Nsec = 0;
             sysGetCurrentTime(&r0Sec, &r0Nsec);
-            RenderTiny3D::renderFrame(app);
+            app.render(g_ramFb, g_width, g_height, g_width);
             u64 r1Sec = 0, r1Nsec = 0;
             sysGetCurrentTime(&r1Sec, &r1Nsec);
             float renderMs = (float)((r1Sec - r0Sec) * 1000.0 + (r1Nsec - r0Nsec) * 1e-6);
 
             struct mallinfo mi = mallinfo();
             app.profiler.update((float)dt, renderMs, updateMs, (uint32_t)mi.uordblks);
+
+            waitFlip();
+            memcpy(g_fbPtr[fbIdx], g_ramFb, g_fbSize);
+            flipFrame(g_ctx, fbIdx);
+            fbIdx ^= 1;
+            setRenderTarget(g_ctx, fbIdx);
         }
 
         // Cleanup
@@ -334,11 +500,22 @@ int main(int /*argc*/, char** /*argv*/) {
             g_audioQueue = 0;
         }
         audioQuit();
-
-        stopAllRumble();
+        {
+            padActParam offAct;
+            memset(&offAct, 0, sizeof(offAct));
+            for (int p = 0; p < MAX_PORT_NUM; ++p) {
+                ioPadSetActDirect((u32)p, &offAct);
+            }
+        }
         ioPadEnd();
+        gcmSetWaitFlip(g_ctx);
+        rsxFinish(g_ctx, 1);
 
-        RenderTiny3D::shutdown();
+        // Free RSX VRAM and host memory now that the RSX is idle.
+        if (g_fbPtr[0]) { rsxFree(g_fbPtr[0]); g_fbPtr[0] = nullptr; }
+        if (g_fbPtr[1]) { rsxFree(g_fbPtr[1]); g_fbPtr[1] = nullptr; }
+        if (g_ramFb) { free(g_ramFb); g_ramFb = nullptr; }
+        if (g_hostAddr) { free(g_hostAddr); g_hostAddr = nullptr; }
         return 0;
     } catch (...) {
         return 1;

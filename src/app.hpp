@@ -172,12 +172,13 @@ public:
     uint32_t rngSeed = 0x12345678u;
     PadState prevPads[2];
     ProfilerStats profiler;
+    bool settingsDirty = false;
 
     App();
     ~App();
 
     void loadSettings();
-    void saveSettings();
+    void saveSettings(bool force = false);
 
     void startMatch();
     void beginTurn(bool fresh);

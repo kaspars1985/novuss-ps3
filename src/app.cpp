@@ -140,7 +140,7 @@ App::App() {
 
 App::~App() {
     stopAIThread();
-    saveSettings();
+    saveSettings(true);
 }
 
 void App::startAIThread() {
@@ -254,7 +254,10 @@ void App::loadSettings() {
     parseIni(fileContent);
 }
 
-void App::saveSettings() {
+void App::saveSettings(bool force) {
+    if (!force && !settingsDirty) return;
+    settingsDirty = false;
+
     std::ostringstream ss;
     ss << "# Novuss settings\n";
     ss << "lang=" << settings.lang << "\n";
@@ -557,7 +560,7 @@ void App::update(double dt, const PadState pads[2]) {
     if (anyPressed(&PadState::r3)) {
         profiler.enabled = !profiler.enabled;
         settings.perf = profiler.enabled;
-        saveSettings();
+        settingsDirty = true;
     }
 
     // ---- Name editor overlay ----
@@ -593,7 +596,7 @@ void App::update(double dt, const PadState pads[2]) {
                 else settings.p2Name = nameEditBuf;
                 names[nameEditPlayer] = nameEditBuf;
                 nameEditOpen = false;
-                saveSettings();
+                saveSettings(true);
             } else if (cellStr == "DEL") {
                 popUtf8(nameEditBuf);
             } else if (cellStr == "CLR") {
@@ -614,7 +617,7 @@ void App::update(double dt, const PadState pads[2]) {
             else settings.p2Name = nameEditBuf;
             names[nameEditPlayer] = nameEditBuf;
             nameEditOpen = false;
-            saveSettings();
+            saveSettings(true);
         }
 
         if (anyPressed(&PadState::circle)) {
@@ -682,9 +685,11 @@ void App::update(double dt, const PadState pads[2]) {
             if (pauseRow == 0 && (anyPressed(&PadState::cross) || anyPressed(&PadState::start))) {
                 // Resume
                 pauseOpen = false;
+                saveSettings();
             } else if (pauseRow == 1 && (anyPressed(&PadState::cross) || anyPressed(&PadState::start))) {
                 // Restart set
                 pauseOpen = false;
+                saveSettings();
                 SetResult sr;
                 sr.replay = true;
                 game.nextSet(sr);
@@ -701,12 +706,12 @@ void App::update(double dt, const PadState pads[2]) {
                 for (int i = 0; i < 3; ++i) if (settings.shotControl == scOpts[i]) cur = i;
                 cur = (cur + dir + 3) % 3;
                 settings.shotControl = scOpts[cur];
-                saveSettings();
+                settingsDirty = true;
             } else if (pauseRow == 4 && (anyPressed(&PadState::cross) || anyPressed(&PadState::start) || pauseLeft || pauseRight)) {
                 // Sound
                 settings.sound = !settings.sound;
                 audio.setEnabled(settings.sound);
-                saveSettings();
+                settingsDirty = true;
             } else if (pauseRow == 5 && (anyPressed(&PadState::cross) || anyPressed(&PadState::start))) {
                 // Exit to Main Menu
                 pauseOpen = false;
@@ -714,10 +719,12 @@ void App::update(double dt, const PadState pads[2]) {
                 phase = Phase::Menu;
                 audio.setMenuMusic(true);
                 menuRow = 10;
+                saveSettings();
             }
         }
         if (anyPressed(&PadState::circle)) {
             pauseOpen = false;
+            saveSettings();
         }
         prevPads[0] = pads[0];
         prevPads[1] = pads[1];
@@ -807,7 +814,7 @@ void App::update(double dt, const PadState pads[2]) {
             default:
                 break;
             }
-            saveSettings();
+            settingsDirty = true;
         };
 
         if (left) cycle(-1);
@@ -829,12 +836,16 @@ void App::update(double dt, const PadState pads[2]) {
                 nameEditRow = 0;
                 nameEditCol = 0;
             } else if (menuRow == 10) {
+                saveSettings();
                 startMatch();
             } else if (menuRow == 11) {
-                if (phase == Phase::Menu) startMatch();
-                else {
+                if (phase == Phase::Menu) {
+                    saveSettings();
+                    startMatch();
+                } else {
                     menuOpen = false;
                     audio.setMenuMusic(false);
+                    saveSettings();
                 }
             } else if (menuRow == 12) {
                 rulesOpen = true;
@@ -848,6 +859,7 @@ void App::update(double dt, const PadState pads[2]) {
             if (phase != Phase::Menu) {
                 menuOpen = false;
                 audio.setMenuMusic(false);
+                saveSettings();
             }
         }
 
@@ -855,11 +867,12 @@ void App::update(double dt, const PadState pads[2]) {
             if (phase != Phase::Menu) {
                 menuOpen = !menuOpen;
                 audio.setMenuMusic(menuOpen);
+                if (!menuOpen) saveSettings();
             }
         }
         if (anyPressed(&PadState::select) || anyPressed(&PadState::triangle)) {
             settings.log = !settings.log;
-            saveSettings();
+            settingsDirty = true;
         }
 
         prevPads[0] = pads[0];
