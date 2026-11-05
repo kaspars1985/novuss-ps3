@@ -263,6 +263,8 @@ void App::startMatch() {
     sim.reset();
 
     menuOpen = false;
+    pauseOpen = false;
+    pauseRow = 0;
     audio.setMenuMusic(false);
     rulesOpen = false;
     resultOpen = false;
@@ -432,6 +434,7 @@ void App::showResult(const SetResult& res, int shooter) {
     resultText = text;
     resultBtnLabel = I18n::tr(settings.lang, (game.winner != -1) ? "newMatch" : (res.replay ? "cont" : "nextSet")) + " [X]";
     resultOpen = true;
+    pauseOpen = false;
 }
 
 void App::update(double dt, const PadState pads[2]) {
@@ -586,6 +589,51 @@ void App::update(double dt, const PadState pads[2]) {
         return;
     }
 
+    // ---- Pause overlay ----
+    if (pauseOpen) {
+        if (anyPressed(&PadState::up)) {
+            pauseRow = (pauseRow + 4) % 5;
+        }
+        if (anyPressed(&PadState::down)) {
+            pauseRow = (pauseRow + 1) % 5;
+        }
+        if (anyPressed(&PadState::cross) || anyPressed(&PadState::start)) {
+            if (pauseRow == 0) {
+                // Resume
+                pauseOpen = false;
+            } else if (pauseRow == 1) {
+                // Restart set
+                pauseOpen = false;
+                SetResult sr;
+                sr.replay = true;
+                game.nextSet(sr);
+                beginTurn(true);
+            } else if (pauseRow == 2) {
+                // Rules
+                rulesOpen = true;
+                rulesScroll = 0;
+            } else if (pauseRow == 3) {
+                // Sound
+                settings.sound = !settings.sound;
+                audio.setEnabled(settings.sound);
+                saveSettings();
+            } else if (pauseRow == 4) {
+                // Exit to Main Menu
+                pauseOpen = false;
+                menuOpen = true;
+                phase = Phase::Menu;
+                audio.setMenuMusic(true);
+                menuRow = 9;
+            }
+        }
+        if (anyPressed(&PadState::circle)) {
+            pauseOpen = false;
+        }
+        prevPads[0] = pads[0];
+        prevPads[1] = pads[1];
+        return;
+    }
+
     // ---- Menu navigation ----
     if (menuOpen) {
         if (anyPressed(&PadState::up)) {
@@ -721,8 +769,13 @@ void App::update(double dt, const PadState pads[2]) {
         return;
     } else {
         if (anyPressed(&PadState::start)) {
-            menuOpen = true;
-            audio.setMenuMusic(true);
+            if (phase == Phase::Menu) {
+                menuOpen = true;
+                audio.setMenuMusic(true);
+            } else {
+                pauseOpen = true;
+                pauseRow = 0;
+            }
         }
     }
 

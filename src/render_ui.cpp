@@ -232,6 +232,49 @@ void App::render(uint32_t* fb, int w, int h, int stride) {
         drawText(fb, w, h, stride, w / 2, cy + ch - (int)(18 * ui), credits, COL_DIM, 0.85f * ui, 1);
     }
 
+    // 6b. In-Game Pause overlay.
+    if (pauseOpen) {
+        fillRect(fb, w, h, stride, 0, 0, w, h, 0x80000000u);
+        int cw = (int)(420 * ui), ch = (int)(290 * ui);
+        int cx = w / 2 - cw / 2, cy = h / 2 - ch / 2;
+        fillRoundRect(fb, w, h, stride, cx, cy, cw, ch, (int)(14 * ui), COL_CARD);
+        strokeRoundRect(fb, w, h, stride, cx, cy, cw, ch, (int)(14 * ui), 2, COL_GOLD);
+        drawText(fb, w, h, stride, w / 2, cy + (int)(18 * ui), I18n::tr(lang, "pause"), COL_GOLD, 1.8f * ui, 1);
+
+        std::string scoreStr = nameOf(0) + "  " + i2s(game.sets[0]) + " : " + i2s(game.sets[1]) + "  " + nameOf(1);
+        drawText(fb, w, h, stride, w / 2, cy + (int)(48 * ui), scoreStr, COL_DIM, 0.95f * ui, 1);
+
+        int ry = cy + (int)(76 * ui);
+        int rh = (int)(26 * ui);
+        int rowStep = (int)(32 * ui);
+        int rowIdx = 0;
+
+        auto drawPauseRow = [&](const std::string& label, const std::string& val) {
+            if (rowIdx == pauseRow) {
+                fillRoundRect(fb, w, h, stride, cx + (int)(24 * ui), ry - (int)(3 * ui),
+                              cw - (int)(48 * ui), rh, (int)(6 * ui), COL_ROW_SEL);
+                strokeRoundRect(fb, w, h, stride, cx + (int)(24 * ui), ry - (int)(3 * ui),
+                                cw - (int)(48 * ui), rh, (int)(6 * ui), 1, COL_GOLD);
+            }
+            uint32_t col = (rowIdx == pauseRow) ? COL_GOLD : COL_TEXT;
+            drawText(fb, w, h, stride, cx + (int)(38 * ui), ry + (int)(4 * ui), label, col, 1.0f * ui, 0);
+            if (!val.empty()) {
+                drawText(fb, w, h, stride, cx + cw - (int)(38 * ui), ry + (int)(4 * ui), val, col, 1.0f * ui, 2);
+            }
+            ry += rowStep;
+            ++rowIdx;
+        };
+
+        drawPauseRow(I18n::tr(lang, "resume"), "");
+        drawPauseRow(I18n::tr(lang, "restartSet"), "");
+        drawPauseRow(I18n::tr(lang, "rules"), "");
+        drawPauseRow(I18n::tr(lang, "sound"), settings.sound ? "ON" : "OFF");
+        drawPauseRow(I18n::tr(lang, "toMenu"), "");
+
+        std::string hint = (lang == "lv") ? "X: apstiprin\xC4\x81t \xC2\xB7 O: turpin\xC4\x81t" : "X: select \xC2\xB7 O: resume";
+        drawText(fb, w, h, stride, w / 2, cy + ch - (int)(20 * ui), hint, COL_DIM, 0.85f * ui, 1);
+    }
+
     // 7. Rules overlay (drawn after menu so it renders on top).
     if (rulesOpen) {
         fillRect(fb, w, h, stride, 0, 0, w, h, 0xB0000000u);

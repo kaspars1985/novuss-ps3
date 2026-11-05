@@ -99,6 +99,8 @@ public:
     Phase phase = Phase::Menu;
     Phase prevPhaseBeforeOverlay = Phase::Menu;
     bool menuOpen = true;
+    bool pauseOpen = false;
+    int pauseRow = 0;
     bool rulesOpen = false;
     bool resultOpen = false;
     int menuRow = 0; // 0: Opponent (AI/2P), 1: Level (Easy/Med/Hard), 2: Match (1/3/5), 3: P1 Name, 4: P2 Name, 5: Guide, 6: Hints, 7: Language (LV/EN), 8: Sound, 9: Start Match, 10: Resume, 11: Rules
