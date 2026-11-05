@@ -518,6 +518,10 @@ void renderTableAndPieces(const App& app, uint32_t* fb, int w, int h, int stride
             if (!k.on) continue;
             v.toScreen(k.x, k.y, sx, sy);
             blitDiscSprite(fb, w, h, stride, sx, sy, s_discs[k.owner]);
+            if (app.helpersHints && app.phase == Phase::Place && k.owner == g.turn && g.isDark(k)) {
+                drawCircleRingAA(fb, w, h, stride, sx, sy, (C::PUCK_R + 3.5) * v.scale,
+                                 std::max(1.5, 2.0 * v.scale), 0xCC3F7FC9u);
+            }
         }
         if (app.hasStriker) {
             v.toScreen(app.strikerX, app.strikerY, sx, sy);
