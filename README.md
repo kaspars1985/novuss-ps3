@@ -14,9 +14,12 @@ The game logic and physics are based on the original web game from [novuss.didnt
   - 1000 × 1000 mm regulation field with 45 mm hardwood rails and 100 mm corner pockets.
   - Correct fouls, penalty puck placements (Rule 7.3), dark puck restrictions (Rule 4.1 / 4.3), and turn-pass logic.
   - Tie-break and set replay conditions (Rules 12.4, 12.5, 12.6).
-- **Smooth 60 FPS Rendering**: Software renderer optimized for the PS3 Cell PPU with smoothstep table rotation animations between sets.
-- **AI Opponent**: 3 difficulty levels (Easy, Medium, Hard) with simulated aim rotation, power charging, and cue pullback.
-- **Local Multiplayer**: 2-player hotseat mode.
+- **Smooth 60 FPS Rendering**: High-fidelity subpixel anti-aliased software rasterizer with direct RSX hardware double-buffering, fixed timestep physics sub-stepping, and smooth table rotation between sets.
+- **AI Opponent**: 3 difficulty levels (Easy, Medium, Hard) running on an independent background worker thread with simulated aim rotation, power charging, and cue pullback.
+- **Local Multiplayer & 7-Port Hotplug**: 2-player hotseat mode with automatic controller port assignment and disconnect detection.
+- **Native PS3 Savedata Utility**: Automatic save and load support (`sysSaveAutoSave2` / `sysSaveAutoLoad2`) under PS3 GameOS Saved Data Utility with settings fallback.
+- **Configurable Shot Controls**: Choose between analog Right Stick cue pull-back, button charging (Cross / R2), or both; Left Stick is dedicated strictly to aim rotation.
+- **In-Game Pause & Overlays**: In-game pause menu (restart set / exit to menu), live match log sheet, rules reference, and real-time performance & memory profiler HUD.
 - **Custom Board Skins**: Drop any PNG into `assets/board.png` (or `USRDIR/board.png` on PS3) to use your own custom table art with bilinear filtering.
 - **Audio & Haptics**: Authentic disc strikes, cushion bounces, pocket drops, menu background music, and DualShock 3 rumble support.
 - **Bilingual**: Latvian and English interface, in-game rules reference, and virtual onscreen keyboard.
@@ -32,21 +35,28 @@ The game logic and physics are based on the original web game from [novuss.didnt
 | **D-Pad Left / Right** | Slide striker along the baseline (skips over blocking pucks) |
 | **Left Analog Stick** | Aim cue angle |
 | **L1 / R1** | Fine aim adjustment |
-| **Hold Cross (✕) / R2** | Charge shot power |
-| **Release Cross (✕) / R2**| Take shot |
-| **Circle (○)** | Cancel charged shot / Close menu |
-| **Triangle (△)** | Open in-game menu |
+| **Right Analog Stick (Down)** | Analog cue pull-back & release shot (*Shot Control*: stick / both) |
+| **Hold Cross (✕) / R2** | Charge shot power (*Shot Control*: button / both) |
+| **Release Cross (✕) / R2** | Take shot |
+| **Circle (○)** | Cancel charged shot / Back / Close menu |
+| **START** | Open in-game pause menu / Toggle main menu |
+| **Triangle (△) / Select** | Toggle match log protocol sheet |
 | **Square (□)** | Open rules reference |
+| **R3 (Right Stick Click)** | Toggle performance & memory profiler HUD |
 
 ### Keyboard (Desktop)
 
 | Key | Action |
 | :--- | :--- |
-| **Arrow Left / Right** | Move striker |
-| **Arrow Up / Down** | Aim cue angle |
-| **A / D** | Fine aim angle |
-| **Spacebar (Hold & Release)** | Charge power and shoot |
-| **Escape / Backspace** | Cancel charge / Open menu |
+| **A / D** | Move striker along the baseline |
+| **Arrow Left / Right** | Aim cue angle |
+| **Shift (Left / Right)** | Fine aim adjustment |
+| **Spacebar / Enter (Hold & Release)** | Charge shot power and shoot |
+| **Escape / Backspace** | Cancel charge / Back / Close menu |
+| **M** | Open in-game pause menu / Toggle main menu |
+| **Tab** | Toggle match log protocol sheet |
+| **R** | Open rules reference |
+| **F3 / P** | Toggle performance & memory profiler HUD |
 
 ---
 
@@ -95,11 +105,7 @@ Prerequisites: [Docker](https://www.docker.com/) (uses the prebuilt `zeldin/ps3d
 
 ```bash
 # Compile and build the installable PKG package
-docker run --rm -v "$PWD":/src -w /src zeldin/ps3dev-docker:arm64 bash -c '\
-  export PS3DEV=/usr/local/ps3dev; \
-  export PSL1GHT=/usr/local/ps3dev; \
-  export PATH=$PS3DEV/bin:$PS3DEV/ppu/bin:$PS3DEV/spu/bin:$PATH; \
-  make -f Makefile.ps3 pkg'
+docker run --rm -v "$PWD":/work -w /work zeldin/ps3dev-docker:arm64 make -f Makefile.ps3 pkg
 ```
 
 This generates `NOVUSS.pkg` in the project root.
