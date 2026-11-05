@@ -53,6 +53,7 @@ SOURCES := \
 	src/app.cpp \
 	src/render_table.cpp \
 	src/render_ui.cpp \
+	src/render_tiny3d.cpp \
 	src/main_ps3.cpp
 
 OBJECTS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(SOURCES))
@@ -71,7 +72,7 @@ PPU_CXXFLAGS := -std=gnu++17 -O2 -Wall -mcpu=cell \
 PPU_LDFLAGS := \
 	-L$(PSL1GHT)/ppu/lib \
 	-L$(PS3DEV)/portlibs/ppu/lib \
-	-lrsx -lgcm_sys -laudio -lio -lsysutil -lsysmodule -lrt -llv2
+	-ltiny3d -lrsx -lgcm_sys -laudio -lio -lsysutil -lsysmodule -lrt -llv2
 
 # ---------------------------------------------------------------------------
 # Phony targets

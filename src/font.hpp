@@ -33,5 +33,8 @@ void drawText(uint32_t* fb, int fbW, int fbH, int fbStride,
 std::vector<std::string> wrapText(const std::string& utf8,
                                   int maxWidthPx, float scale = 1.0f);
 
+// Get the 8x16 1-bit bitmap rows for a codepoint (used for GPU texture atlas).
+void getGlyphBitmap(uint32_t cp, uint8_t out[16]);
+
 } // namespace Render
 } // namespace Novuss

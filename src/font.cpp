@@ -614,5 +614,9 @@ std::vector<std::string> wrapText(const std::string& utf8,
     return lines;
 }
 
+void getGlyphBitmap(uint32_t cp, uint8_t out[16]) {
+    resolveGlyph(cp, out);
+}
+
 } // namespace Render
 } // namespace Novuss
