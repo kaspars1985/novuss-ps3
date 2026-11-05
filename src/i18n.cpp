@@ -358,7 +358,7 @@ const std::vector<RulesSection>& rules(const std::string& lang) {
          "gives them the set. In online matches the server checks and plays "
          "every shot, so both players always see the same table."},
         {"About & Credits",
-         "Original web game created by Kaspars Foigts (laacz.lv), part of didnt.work. "
+         "Original web game created by Kaspars Foigts (laacz.lv / novuss.didnt.work). "
          "Sony PlayStation 3 console version developed and ported by Kaspars Ciematnieks (ciematnieks.lv)."},
     };
 
@@ -423,7 +423,7 @@ const std::vector<RulesSection>& rules(const std::string& lang) {
          "spēlē katru sitienu pārbauda un izspēlē serveris, tāpēc abi "
          "spēlētāji vienmēr redz vienu un to pašu galdu."},
         {"Par spēli un autoriem",
-         "Oriģinālās tīmekļa spēles izveidotājs ir Kaspars Foigts (laacz.lv), daļa no didnt.work. "
+         "Oriģinālās tīmekļa spēles izveidotājs ir Kaspars Foigts (laacz.lv / novuss.didnt.work). "
          "Sony PlayStation 3 konsoles versiju izstrādāja un portēja Kaspars Ciematnieks (ciematnieks.lv)."},
     };
 

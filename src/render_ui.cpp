@@ -202,8 +202,8 @@ void App::render(uint32_t* fb, int w, int h, int stride) {
         }
 
         std::string credits = (lang == "lv")
-            ? "laacz.lv (didnt.work) · PS3 ports: ciematnieks.lv"
-            : "laacz.lv (didnt.work) · PS3 port: ciematnieks.lv";
+            ? "laacz.lv (novuss.didnt.work) · PS3 ports: ciematnieks.lv"
+            : "laacz.lv (novuss.didnt.work) · PS3 port: ciematnieks.lv";
         drawText(fb, w, h, stride, w / 2, cy + ch - (int)(18 * ui), credits, COL_DIM, 0.85f * ui, 1);
     }
 
