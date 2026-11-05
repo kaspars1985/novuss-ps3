@@ -4,7 +4,7 @@ Novuss is the traditional Latvian cue-and-disc board game, often described as a 
 
 This repository contains a full C++ port of Novuss for the **Sony PlayStation 3** (built with PSL1GHT v2) and **Desktop** (macOS and Linux via SDL2). 
 
-The game logic and physics are based on the original web game from [novuss.didnt.work](https://novuss.didnt.work) by [laacz.lv](https://laacz.lv), ported to PS3 homebrew and modern C++ by me ([ciematnieks.lv](https://ciematnieks.lv)).
+The game logic and physics are based on the original web game from [novuss.didnt.work](https://novuss.didnt.work) by [laacz.lv](https://laacz.lv), ported to PS3 homebrew and modern C++ by me (read AI) ([ciematnieks.lv](https://ciematnieks.lv)).
 
 ---
 

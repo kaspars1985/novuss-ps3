@@ -914,7 +914,9 @@ void App::update(double dt, const PadState pads[2]) {
         const double tPull = 0.35;
         const double tTotal = tSlide + tAim + tPull;
 
-        double targetAngle = std::atan2(aiAnim.dirX, -aiAnim.dirY);
+        double localDirX = 0, localDirY = -1;
+        flipDir(game.sides[game.turn], aiAnim.dirX, aiAnim.dirY, localDirX, localDirY);
+        double targetAngle = std::atan2(localDirX, -localDirY);
         targetAngle = clampd(targetAngle, -1.48, 1.48);
 
         if (aiAnim.t <= tSlide) {

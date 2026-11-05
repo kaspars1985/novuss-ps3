@@ -506,7 +506,7 @@ void renderTableAndPieces(const App& app, uint32_t* fb, int w, int h, int stride
     }
 
     // 5. Pucks & Striker.
-    if (app.phase == Phase::Moving && app.sim) {
+    if (app.sim) {
         for (const Body& b : app.sim->bodies) {
             if (!b.on) continue;
             v.toScreen(b.x, b.y, sx, sy);
