@@ -1,0 +1,208 @@
+# Makefile.ps3 - Self-contained PSL1GHT v2 build for Novuss PS3 homebrew
+#
+# Requires:
+#   PSL1GHT  -> $(PSL1GHT)   (e.g. /usr/local/psl1ght)
+#   PS3DEV   -> $(PS3DEV)    (e.g. /usr/local/ps3dev)
+#
+# Targets:
+#   make -f Makefile.ps3            -> build_ps3/novuss.elf
+#   make -f Makefile.ps3 pkg        -> build NOVUSS.pkg
+#   make -f Makefile.ps3 clean
+
+# ---------------------------------------------------------------------------
+# Toolchain
+# ---------------------------------------------------------------------------
+PPU_CXX      := ppu-g++
+PPU_STRIP    := ppu-strip
+PPU_OBJCOPY  := ppu-objcopy
+SPRX         := sprxlinker
+PACKAGE_FINALIZE := package_finalize
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+PSL1GHT      ?= /usr/local/psl1ght
+PS3DEV       ?= /usr/local/ps3dev
+
+PSL1GHT_BIN  := $(PSL1GHT)/bin
+PS3DEV_BIN   := $(PS3DEV)/bin
+
+BUILD        := build_ps3
+PKGDIR       := $(BUILD)/pkg
+USRDIR       := $(PKGDIR)/USRDIR
+ELF          := $(BUILD)/novuss.elf
+STRIPPED_ELF := $(BUILD)/novuss.stripped.elf
+EBOOT        := $(USRDIR)/EBOOT.BIN
+PKG          := NOVUSS.pkg
+
+APPID        := NOVU00001
+CONTENT_ID   := UP0001-NOVU00001_00-0000000000000000
+TITLE        := Novuss (LNF)
+
+# ---------------------------------------------------------------------------
+# Sources
+# ---------------------------------------------------------------------------
+SOURCES := \
+	src/game_sim.cpp \
+	src/game_rules.cpp \
+	src/game_ai.cpp \
+	src/audio.cpp \
+	src/i18n.cpp \
+	src/font.cpp \
+	src/app.cpp \
+	src/render_table.cpp \
+	src/render_ui.cpp \
+	src/main_ps3.cpp
+
+OBJECTS := $(patsubst src/%.cpp,$(BUILD)/%.o,$(SOURCES))
+
+# ---------------------------------------------------------------------------
+# Flags
+# ---------------------------------------------------------------------------
+PPU_CXXFLAGS := -std=gnu++17 -O2 -Wall -mcpu=cell \
+	-mhard-float -fmodulo-sched -ffunction-sections -fdata-sections \
+	-D_GLIBCXX11_USE_C99_STDIO \
+	-I$(PSL1GHT)/ppu/include \
+	-I$(PS3DEV)/portlibs/ppu/include \
+	-Isrc
+
+PPU_LDFLAGS := \
+	-L$(PSL1GHT)/ppu/lib \
+	-L$(PS3DEV)/portlibs/ppu/lib \
+	-lrsx -lgcm_sys -laudio -lio -lsysutil -lsysmodule -lrt -llv2
+
+# ---------------------------------------------------------------------------
+# Phony targets
+# ---------------------------------------------------------------------------
+.PHONY: all elf pkg clean assets sfo eboot
+
+all: elf
+
+elf: $(ELF)
+
+# ---------------------------------------------------------------------------
+# Compile
+# ---------------------------------------------------------------------------
+$(BUILD):
+	@mkdir -p $(BUILD)
+
+$(BUILD)/%.o: src/%.cpp | $(BUILD)
+	@echo "  CXX  $<"
+	@$(PPU_CXX) $(PPU_CXXFLAGS) -c $< -o $@
+
+# ---------------------------------------------------------------------------
+# Link
+# ---------------------------------------------------------------------------
+$(ELF): $(OBJECTS)
+	@echo "  LD   $@"
+	@$(PPU_CXX) $(OBJECTS) -o $@ $(PPU_LDFLAGS)
+
+# ---------------------------------------------------------------------------
+# EBOOT.BIN (SELF)
+# ---------------------------------------------------------------------------
+eboot: $(EBOOT)
+
+$(EBOOT): $(ELF)
+	@mkdir -p $(USRDIR)
+	@echo "  STRIP $(STRIPPED_ELF)"
+	@$(PPU_STRIP) -s $(ELF) -o $(STRIPPED_ELF)
+	@echo "  SPRX  $(STRIPPED_ELF)"
+	@$(SPRX) $(STRIPPED_ELF)
+	@echo "  SELF  $@"
+	@if [ -x "$(PS3DEV_BIN)/make_self_npdrm" ]; then \
+		$(PS3DEV_BIN)/make_self_npdrm $(STRIPPED_ELF) $(EBOOT) $(CONTENT_ID); \
+	elif [ -x "$(PSL1GHT_BIN)/make_self_npdrm" ]; then \
+		$(PSL1GHT_BIN)/make_self_npdrm $(STRIPPED_ELF) $(EBOOT) $(CONTENT_ID); \
+	elif command -v make_self_npdrm >/dev/null 2>&1; then \
+		make_self_npdrm $(STRIPPED_ELF) $(EBOOT) $(CONTENT_ID); \
+	elif command -v fself >/dev/null 2>&1; then \
+		fself -n $(STRIPPED_ELF) $(EBOOT); \
+	elif [ -x "$(PSL1GHT_BIN)/fself" ]; then \
+		$(PSL1GHT_BIN)/fself -n $(STRIPPED_ELF) $(EBOOT); \
+	elif command -v scetool >/dev/null 2>&1; then \
+		scetool -0 $(STRIPPED_ELF) -1 $(EBOOT); \
+	else \
+		echo "ERROR: no SELF tool found (make_self_npdrm / fself / scetool)"; \
+		exit 1; \
+	fi
+
+# ---------------------------------------------------------------------------
+# Assets (ICON0.PNG, PIC1.PNG)
+# ---------------------------------------------------------------------------
+assets:
+	@mkdir -p $(PKGDIR)
+	@echo "  ASSETS $(PKGDIR)"
+	@python3 scripts/gen_ps3_assets.py $(PKGDIR)
+
+# ---------------------------------------------------------------------------
+# PARAM.SFO
+# ---------------------------------------------------------------------------
+sfo:
+	@mkdir -p $(PKGDIR)
+	@echo "  SFO  $(PKGDIR)/PARAM.SFO"
+	@if [ -x "$(PSL1GHT_BIN)/sfo" ] && [ -f "$(PSL1GHT_BIN)/sfo.xml" ]; then \
+		$(PSL1GHT_BIN)/sfo \
+			--title "$(TITLE)" \
+			--appid "$(APPID)" \
+			-f $(PSL1GHT_BIN)/sfo.xml \
+			$(PKGDIR)/PARAM.SFO; \
+	elif [ -x "$(PSL1GHT_BIN)/sfo" ] && [ -f "$(PS3DEV_BIN)/sfo.xml" ]; then \
+		$(PSL1GHT_BIN)/sfo \
+			--title "$(TITLE)" \
+			--appid "$(APPID)" \
+			-f $(PS3DEV_BIN)/sfo.xml \
+			$(PKGDIR)/PARAM.SFO; \
+	elif [ -x "$(PSL1GHT_BIN)/sfo" ]; then \
+		$(PSL1GHT_BIN)/sfo \
+			--title "$(TITLE)" \
+			--appid "$(APPID)" \
+			$(PKGDIR)/PARAM.SFO; \
+	elif [ -f "$(PSL1GHT)/bin/sfo.xml" ] && [ -x "$(PSL1GHT_BIN)/sfo.py" ]; then \
+		python3 $(PSL1GHT_BIN)/sfo.py \
+			--title "$(TITLE)" \
+			--appid "$(APPID)" \
+			-f $(PSL1GHT)/bin/sfo.xml \
+			$(PKGDIR)/PARAM.SFO; \
+	elif [ -x "$(PSL1GHT_BIN)/sfo.py" ]; then \
+		python3 $(PSL1GHT_BIN)/sfo.py \
+			--title "$(TITLE)" \
+			--appid "$(APPID)" \
+			$(PKGDIR)/PARAM.SFO; \
+	else \
+		echo "  SFO  (fallback python)"; \
+		python3 scripts/gen_ps3_assets.py --sfo $(PKGDIR)/PARAM.SFO $(PKGDIR); \
+	fi
+
+# ---------------------------------------------------------------------------
+# Package NOVUSS.pkg
+# ---------------------------------------------------------------------------
+pkg: $(EBOOT) assets sfo
+	@echo "  PKG  $(PKG)"
+	@if [ -x "$(PSL1GHT_BIN)/pkg" ]; then \
+		$(PSL1GHT_BIN)/pkg \
+			--contentid $(CONTENT_ID) \
+			$(PKGDIR)/ $(PKG); \
+	elif [ -x "$(PSL1GHT_BIN)/pkg.py" ]; then \
+		python3 $(PSL1GHT_BIN)/pkg.py \
+			--contentid $(CONTENT_ID) \
+			$(PKGDIR)/ $(PKG); \
+	elif [ -x "$(PS3DEV_BIN)/pkg.py" ]; then \
+		python3 $(PS3DEV_BIN)/pkg.py \
+			--contentid $(CONTENT_ID) \
+			$(PKGDIR)/ $(PKG); \
+	elif [ -x "$(PS3DEV_BIN)/pkg" ]; then \
+		$(PS3DEV_BIN)/pkg \
+			--contentid $(CONTENT_ID) \
+			$(PKGDIR)/ $(PKG); \
+	else \
+		echo "ERROR: pkg tool not found (pkg / pkg.py)"; \
+		exit 1; \
+	fi
+	@echo "  FINALIZE $(PKG)"
+	@$(PACKAGE_FINALIZE) $(PKG)
+
+# ---------------------------------------------------------------------------
+# Clean
+# ---------------------------------------------------------------------------
+clean:
+	@rm -rf $(BUILD) $(PKG)

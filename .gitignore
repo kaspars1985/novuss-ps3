@@ -1,0 +1,17 @@
+# Build artifacts
+build/
+build_ps3/
+_backups/
+scratch/
+*.o
+*.elf
+*.self
+*.bin
+
+# macOS
+.DS_Store
+
+# Temporary images
+build/*.bmp
+NOVUSS.pkg
+tests/test_game
