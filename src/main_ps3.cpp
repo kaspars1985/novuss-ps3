@@ -196,10 +196,14 @@ static void audioThreadMain(void* /*arg*/) {
     u32 blockIdx = 0;
     while (g_audioRunning) {
         if (sysEventQueueReceive(g_audioQueue, &ev, 20000) == 0) {
-            blockIdx = (blockIdx + 1) % AUDIO_BLOCK_8;
             float* dst = (float*)(uintptr_t)g_audioConfig.audioDataStart +
                          blockIdx * AUDIO_BLOCK_SAMPLES * 2;
-            if (g_appPtr) g_appPtr->audio.mixStereoFloat(dst, AUDIO_BLOCK_SAMPLES);
+            if (g_appPtr) {
+                g_appPtr->audio.mixStereoFloat(dst, AUDIO_BLOCK_SAMPLES);
+            } else {
+                memset(dst, 0, AUDIO_BLOCK_SAMPLES * 2 * sizeof(float));
+            }
+            blockIdx = (blockIdx + 1) % AUDIO_BLOCK_8;
         }
     }
     sysThreadExit(0);

@@ -148,7 +148,6 @@ void SoundEngine::stopAll() {
 }
 
 bool SoundEngine::loadMenuMusic(const std::string& path) {
-    SpinGuard guard(lock_);
     std::vector<std::string> candidates;
     if (!path.empty()) candidates.push_back(path);
     candidates.push_back("/dev_hdd0/game/NOVU00001/USRDIR/menu_bgm.adpcm");
@@ -175,26 +174,30 @@ bool SoundEngine::loadMenuMusic(const std::string& path) {
         fclose(f);
         return false;
     }
+    std::vector<uint8_t> localData;
     try {
-        bgmData_.resize(numFrames);
+        localData.resize(numFrames);
     } catch (...) {
         fclose(f);
-        bgmData_.clear();
         return false;
     }
-    size_t readCount = fread(bgmData_.data(), 1, numFrames, f);
+    size_t readCount = fread(localData.data(), 1, numFrames, f);
     fclose(f);
     if (readCount != numFrames) {
-        bgmData_.clear();
         return false;
     }
-    bgmTotalFrames_ = numFrames;
-    bgmFramePos_ = 0;
-    bgmValpredL_ = bgmIndexL_ = 0;
-    bgmValpredR_ = bgmIndexR_ = 0;
-    bgmCurrL_ = bgmCurrR_ = 0;
-    bgmNextL_ = bgmNextR_ = 0;
-    bgmSubFrame_ = 0;
+
+    {
+        SpinGuard guard(lock_);
+        bgmData_ = std::move(localData);
+        bgmTotalFrames_ = numFrames;
+        bgmFramePos_ = 0;
+        bgmValpredL_ = bgmIndexL_ = 0;
+        bgmValpredR_ = bgmIndexR_ = 0;
+        bgmCurrL_ = bgmCurrR_ = 0;
+        bgmNextL_ = bgmNextR_ = 0;
+        bgmSubFrame_ = 0;
+    }
     return true;
 }
 
