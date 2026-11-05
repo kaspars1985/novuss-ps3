@@ -45,8 +45,12 @@ static sys_ppu_thread_t g_audioThread = 0;
 static volatile int g_audioRunning = 0;
 static App* g_appPtr = nullptr;
 
-// Persistent pad state (ioPadGetData only fills when data.len > 0).
-static padData s_lastData[2];
+// Persistent pad state per physical port (ioPadGetData only fills when
+// data.len > 0). Indexed by physical controller port 0..MAX_PORT_NUM-1.
+static padData s_lastData[MAX_PORT_NUM];
+
+// Which physical controller port (0..6) is assigned to Player 0 and Player 1.
+static int s_playerPort[2] = {-1, -1};
 
 // ---------------------------------------------------------------------------
 // Sysutil callback
@@ -258,22 +262,56 @@ static float normAxis(unsigned char v) {
     return (f > 0) ? (f - dz) / (1.0f - dz) : (f + dz) / (1.0f - dz);
 }
 
+// Reset a persistent pad snapshot to a neutral, all-released state so that a
+// disconnected controller can never leave buttons stuck pressed.
+static void resetPadData(padData& d) {
+    memset(&d, 0, sizeof(d));
+    d.ANA_L_H = 128;
+    d.ANA_L_V = 128;
+    d.ANA_R_H = 128;
+    d.ANA_R_V = 128;
+}
+
 static void readPads(PadState pads[2]) {
+    pads[0] = PadState();
+    pads[1] = PadState();
+
     padInfo2 info;
     if (ioPadGetInfo2(&info) != 0) {
-        for (int i = 0; i < 2; ++i) pads[i] = PadState();
+        for (int p = 0; p < MAX_PORT_NUM; ++p) resetPadData(s_lastData[p]);
+        s_playerPort[0] = -1;
+        s_playerPort[1] = -1;
         return;
     }
+
+    // Reset any disconnected port's snapshot so stale button state is cleared.
+    for (int p = 0; p < MAX_PORT_NUM; ++p) {
+        bool connected = (p < (int)info.max) && ((info.port_status[p] & 1) != 0);
+        if (!connected) resetPadData(s_lastData[p]);
+    }
+
+    // Assign the first two connected ports (ascending) to Player 0 and 1.
+    s_playerPort[0] = -1;
+    s_playerPort[1] = -1;
+    int nextPlayer = 0;
+    for (int p = 0; p < MAX_PORT_NUM && nextPlayer < 2; ++p) {
+        bool connected = (p < (int)info.max) && ((info.port_status[p] & 1) != 0);
+        if (connected) {
+            s_playerPort[nextPlayer] = p;
+            ++nextPlayer;
+        }
+    }
+
     for (int i = 0; i < 2; ++i) {
-        pads[i] = PadState();
-        if (i >= (int)info.max || !(info.port_status[i] & 1)) continue;
+        int port = s_playerPort[i];
+        if (port < 0) continue;
 
         padData data;
         memset(&data, 0, sizeof(data));
-        if (ioPadGetData(i, &data) == 0 && data.len > 0) {
-            s_lastData[i] = data;
+        if (ioPadGetData((u32)port, &data) == 0 && data.len > 0) {
+            s_lastData[port] = data;
         }
-        const padData& d = s_lastData[i];
+        const padData& d = s_lastData[port];
 
         pads[i].connected = true;
         pads[i].lx = normAxis(d.ANA_L_H);
@@ -311,8 +349,9 @@ static void stopAllRumble() {
     memset(&offAct, 0, sizeof(offAct));
     offAct.small_motor = 0;
     offAct.large_motor = 0;
-    ioPadSetActDirect(0, &offAct);
-    ioPadSetActDirect(1, &offAct);
+    for (int p = 0; p < MAX_PORT_NUM; ++p) {
+        ioPadSetActDirect((u32)p, &offAct);
+    }
     s_rumbleActive[0] = false;
     s_rumbleActive[1] = false;
     s_rumbleTimer[0] = 0.0f;
@@ -322,6 +361,8 @@ static void stopAllRumble() {
 static void drainRumble(App& app, double dt) {
     for (auto& ev : app.rumbleQueue) {
         if (ev.pad < 0 || ev.pad > 1) continue;
+        int port = s_playerPort[ev.pad];
+        if (port < 0) continue;
         padActParam act;
         memset(&act, 0, sizeof(act));
         float s = ev.strength;
@@ -329,7 +370,7 @@ static void drainRumble(App& app, double dt) {
         if (s > 1) s = 1;
         act.small_motor = (s > 0.15f) ? 1 : 0;
         act.large_motor = (u8)(s * 255.0f);
-        ioPadSetActDirect((u32)ev.pad, &act);
+        ioPadSetActDirect((u32)port, &act);
         s_rumbleTimer[ev.pad] = (ev.duration > 0.01f) ? ev.duration : 0.05f;
         s_rumbleActive[ev.pad] = true;
     }
@@ -339,11 +380,14 @@ static void drainRumble(App& app, double dt) {
         if (s_rumbleActive[p]) {
             s_rumbleTimer[p] -= (float)dt;
             if (s_rumbleTimer[p] <= 0.0f) {
-                padActParam act;
-                memset(&act, 0, sizeof(act));
-                act.small_motor = 0;
-                act.large_motor = 0;
-                ioPadSetActDirect((u32)p, &act);
+                int port = s_playerPort[p];
+                if (port >= 0) {
+                    padActParam act;
+                    memset(&act, 0, sizeof(act));
+                    act.small_motor = 0;
+                    act.large_motor = 0;
+                    ioPadSetActDirect((u32)port, &act);
+                }
                 s_rumbleActive[p] = false;
                 s_rumbleTimer[p] = 0.0f;
             }
@@ -358,6 +402,9 @@ int main(int /*argc*/, char** /*argv*/) {
     try {
         if (initVideo() != 0) return 1;
         if (ioPadInit(7) != 0) return 1;
+
+        // Initialize persistent pad snapshots to neutral.
+        for (int p = 0; p < MAX_PORT_NUM; ++p) resetPadData(s_lastData[p]);
 
         sysUtilRegisterCallback(SYSUTIL_EVENT_SLOT0, onSysutilEvent, nullptr);
 
@@ -444,8 +491,9 @@ int main(int /*argc*/, char** /*argv*/) {
         {
             padActParam offAct;
             memset(&offAct, 0, sizeof(offAct));
-            ioPadSetActDirect(0, &offAct);
-            ioPadSetActDirect(1, &offAct);
+            for (int p = 0; p < MAX_PORT_NUM; ++p) {
+                ioPadSetActDirect((u32)p, &offAct);
+            }
         }
         ioPadEnd();
         gcmSetWaitFlip(g_ctx);
