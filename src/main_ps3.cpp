@@ -17,6 +17,7 @@
 #include <cmath>
 
 #include "app.hpp"
+#include "font.hpp"
 
 using namespace Novuss;
 
@@ -407,6 +408,13 @@ int main(int /*argc*/, char** /*argv*/) {
         for (int p = 0; p < MAX_PORT_NUM; ++p) resetPadData(s_lastData[p]);
 
         sysUtilRegisterCallback(SYSUTIL_EVENT_SLOT0, onSysutilEvent, nullptr);
+
+        // Display branded boot splash screen while loading audio & board texture.
+        for (int i = 0; i < g_width * g_height; ++i) g_ramFb[i] = 0xFF140E0Au;
+        Render::drawText(g_ramFb, g_width, g_height, g_width, g_width / 2, g_height / 2 - 20, "NOVUSS", 0xFFE8C070u, 2.0f, 1);
+        Render::drawText(g_ramFb, g_width, g_height, g_width, g_width / 2, g_height / 2 + 24, "Iel\xC4\x81" "d\xC4\x93...", 0xFF9A8C7Au, 1.0f, 1);
+        memcpy(g_fbPtr[0], g_ramFb, g_fbSize);
+        flipFrame(g_ctx, 0);
 
         App app;
 
